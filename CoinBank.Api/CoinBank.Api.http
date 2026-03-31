@@ -1,0 +1,6 @@
+@CoinBank.Api_HostAddress = http://localhost:5136
+
+GET {{CoinBank.Api_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
