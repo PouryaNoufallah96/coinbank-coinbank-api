@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="CoinBank.Api/CoinBank.Api.csproj" />
+  <Project Path="CoinBank.Domain/CoinBank.Domain.csproj" />
+  <Project Path="CoinBank.Services/CoinBank.Services.csproj" />
+  <Project Path="CoinBank.Utilities/CoinBank.Utilities.csproj" />
+</Solution>
