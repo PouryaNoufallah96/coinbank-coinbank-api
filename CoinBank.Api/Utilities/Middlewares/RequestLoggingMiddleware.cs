@@ -59,7 +59,7 @@ namespace SLT.Api.Utilities.Middlewares
                     if (jwtToken != null)
                     {
                         publicKey = jwtToken.Claims.FirstOrDefault(c => c.Type == Claims.PublicKey.ToDisplay())?.Value ?? "anonymous";
-                        walletAddress = jwtToken.Claims.FirstOrDefault(c => c.Type == Claims.WalletAddress.ToDisplay())?.Value ?? "anonymous";
+                        walletAddress = jwtToken.Claims.FirstOrDefault(c => c.Type == Claims.EVMWalletAddress.ToDisplay())?.Value ?? "anonymous";
                     }
                 }
                 catch
