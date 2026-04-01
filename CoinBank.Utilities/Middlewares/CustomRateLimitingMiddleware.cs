@@ -28,7 +28,7 @@ namespace _Utilities.Middlewares
             // Get endpoint and identifier info
             var actionDescriptor = endpoint?.Metadata.GetMetadata<ControllerActionDescriptor>();
             var endpointName = $"{actionDescriptor?.ControllerName ?? "Unknown"}.{actionDescriptor?.ActionName ?? "Unknown"}";
-            var identifier = context.GetClaim(Claims.WalletAddress.ToString()) ?? context.GetRequestIpv4() ?? "unknown";
+            var identifier = context.GetClaim(Claims.EVMWalletAddress.ToString()) ?? context.GetRequestIpv4() ?? "unknown";
 
             var requestListKey = $"ratelimit_{identifier}_{endpointName}_timestamps";
             var lockKey = $"ratelimit_{identifier}_{endpointName}_lock";

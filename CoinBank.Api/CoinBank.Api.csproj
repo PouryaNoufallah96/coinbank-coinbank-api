@@ -10,8 +10,4 @@
     <ProjectReference Include="..\CoinBank.Services\CoinBank.Services.csproj" />
   </ItemGroup>
 
-  <ItemGroup>
-    <Folder Include="Controllers\V1\" />
-  </ItemGroup>
-
 </Project>

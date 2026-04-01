@@ -10,9 +10,4 @@
     <ProjectReference Include="..\CoinBank.Utilities\CoinBank.Utilities.csproj" />
   </ItemGroup>
 
-  <ItemGroup>
-    <Folder Include="Collections\" />
-    <Folder Include="Repositories\Contracts\" />
-  </ItemGroup>
-
 </Project>

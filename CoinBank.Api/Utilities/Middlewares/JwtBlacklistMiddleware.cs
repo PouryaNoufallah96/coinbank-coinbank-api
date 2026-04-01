@@ -1,4 +1,4 @@
-﻿using SLT.Services._User.DTOs.Storages;
+﻿using CoinBank.Services._User.DTOs.Storages;
 using Utilities.Exceptions;
 
 namespace SLT.Api.Utilities.Middlewares
