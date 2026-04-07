@@ -2,6 +2,7 @@
 using CoinBank.Domain.Repositories.Contracts;
 using CoinBank.Services._PreSale.DTOs.Results;
 using CoinBank.Services._PreSale.DTOs.Updates;
+using CoinBank.Services._PreSaleOrder;
 using MongoDB.Driver;
 using MongoDB.Driver.Linq;
 using Utilities.DTOs;
@@ -10,14 +11,16 @@ using static Utilities.Constants.RegisterMode;
 
 namespace CoinBank.Services._PreSale
 {
-    public class PreSaleService(IPreSaleRepository _preSaleRepository) : IPreSaleService, IScopedDependency
+    public class PreSaleService(IPreSaleRepository _preSaleRepository,IPreSaleOrderService _preSaleOrderService) : IPreSaleService, IScopedDependency
+        
     {
 
         public async Task<PreSaleResult> CreatePreSaleTokenAsync(CreatePreSaleTokenUpdate update)
         {
             ValidateCreateRequest(update);
+            var symbol = update.Symbol.Trim().ToUpper();
 
-            var existing = await _preSaleRepository.AsQueryable().FirstOrDefaultAsync(q => q.Symbol.ToLower() == update.Symbol.ToLower());
+            var existing = await _preSaleRepository.AsQueryable().FirstOrDefaultAsync(q => q.Symbol== symbol);
 
             if (existing != null)
                 throw new BadRequestException("PreSale with this symbol already exists.");
@@ -26,7 +29,7 @@ namespace CoinBank.Services._PreSale
             {
                 PreSaleReference = Guid.NewGuid().ToString("N"),
                 Name = update.Name,
-                Symbol = update.Symbol,
+                Symbol = symbol,
                 LogoUrl = update.LogoUrl,
                 Description = update.Description,
                 TotalSupply = update.TotalSupply,
@@ -52,28 +55,95 @@ namespace CoinBank.Services._PreSale
 
         public async Task<PreSaleResult> GetOnePreSaleTokenAsync(GetOnePreSaleTokenUpdate update)
         {
-            
-            var entity = await _preSaleRepository.AsQueryable().FirstOrDefaultAsync(q => q.PreSaleReference == update.PreSaleReference) ??
+            var preSale = await _preSaleRepository.AsQueryable().FirstOrDefaultAsync(q => q.PreSaleReference == update.PreSaleReference) ??
                 throw new NotFoundException("PreSale not found.");
-            
 
-            return MapToResult(entity);
+            return MapToResult(preSale);
         }
 
         public async Task<PreSaleListResult> GetAllPreSaleTokensAsync(Pagination pagination)
         {
-            var totalCount = await _preSaleRepository.CountAsync();
+            var query = _preSaleRepository.AsQueryable();
 
-            var data = await _preSaleRepository.GetPagedAsync(pagination.Page, pagination.Size);
+            var totalCount = await query.CountAsync();
+            var pageCount = (int)Math.Ceiling((double)totalCount / pagination.Size);
+
+            var skip = (pagination.Page - 1) * pagination.Size;
+
+            var data = await query
+                .OrderByDescending(q => q.CreatedMoment) 
+                .Skip(skip)
+                .Take(pagination.Size)
+                .Select(preSale => new PreSaleResult
+                {
+                   CreatedMoment = preSale.CreatedMoment,
+                   Description  = preSale.Description,
+                   EndSellingAt = preSale.EndSellingAt,
+                   LogoUrl = preSale.LogoUrl,
+                   MaxPerOrder = preSale.MaxPerOrder,
+                   MinPerOrder = preSale.MinPerOrder,
+                   ModifiedMoment = preSale.ModifiedMoment,
+                   Name = preSale.Name,
+                   PreSaleReference = preSale.PreSaleReference,
+                   Price = preSale.Price,
+                   ReleaseSchedule = preSale.ReleaseSchedule,
+                   StartSellingAt = preSale.StartSellingAt,
+                   State = preSale.State,
+                   Symbol = preSale.Symbol,
+                   TotalSupply = preSale.TotalSupply
+                })
+                .ToListAsync(cancellationToken);
 
             return new PreSaleListResult
             {
-                Data = data.Select(MapToResult).ToList(),
+                Data = data,
                 TotalCount = totalCount,
-                PageCount = (int)Math.Ceiling((double)totalCount / pagination.Size)
+                PageCount = pageCount
             };
         }
 
+        public async Task SyncExpirePreSaleTokenAsync()
+        {
+            var now = DateTime.UtcNow;
+
+            var builder = Builders<PreSale>.Filter;
+
+            var filter = builder.And(
+                builder.Eq(x => x.State, PreSaleState.Active),
+                builder.Lt(x => x.EndSellingAt, now)
+            );
+
+            var update = Builders<PreSale>.Update
+                .Set(x => x.State, PreSaleState.Expired);
+
+            await _preSaleRepository.UpdateManyAsync(filter, update);
+        }
+
+
+        public async Task SyncCompletedPreSalesAsync()
+        {
+            var now = DateTime.UtcNow;
+
+            var presales = await _preSaleRepository.AsQueryable()
+                .Where(x => x.State == PreSaleState.Expired)
+                .Where(x => !x.IsOwnOrdersCompleted)
+                .Where(x => x.ReleaseSchedule != null && x.ReleaseSchedule.Any())
+                .Where(x => x.ReleaseSchedule.Max(r => r.ReleaseDate) <= now)
+                .ToListAsync();
+
+            foreach (var presale in presales)
+            {
+                await _preSaleOrderService
+                    .MakeCompeletePreSaleOrderStateByPreSaleReferenceAsync(presale.PreSaleReference);
+
+                presale.IsOwnOrdersCompleted = true;
+                await _preSaleRepository.ReplaceOneAsync(presale);
+            }
+        }
+
+
+
+        #region Privates
         private PreSaleResult MapToResult(PreSale entity)
         {
             return new PreSaleResult
@@ -95,10 +165,6 @@ namespace CoinBank.Services._PreSale
                 ModifiedMoment = entity.ModifiedMoment
             };
         }
-
-
-
-        #region Privates
 
         private void ValidateCreateRequest(CreatePreSaleTokenUpdate update)
         {
@@ -160,6 +226,8 @@ namespace CoinBank.Services._PreSale
                     throw new Exception("Release dates must be unique.");
             }
         }
+
+     
 
         #endregion
 

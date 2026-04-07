@@ -18,7 +18,7 @@
 		<PackageReference Include="Microsoft.AspNetCore.SignalR.Core" Version="1.2.0" />
 		<PackageReference Include="System.Net.WebSockets" Version="4.3.0" />
 		<PackageReference Include="System.Reactive" Version="6.0.1" />
-		<PackageReference Include="TronSdk.Protocol" Version="1.2.3" />
+		<PackageReference Include="SixLabors.ImageSharp" Version="3.1.12" />
 	</ItemGroup>
 
 
@@ -29,6 +29,8 @@
 
 	<ItemGroup>
 	  <Folder Include="_Common\Services\" />
+	  <Folder Include="_Stake\DTOs\Results\" />
+	  <Folder Include="_Stake\DTOs\Updates\" />
 	</ItemGroup>
 
 </Project>

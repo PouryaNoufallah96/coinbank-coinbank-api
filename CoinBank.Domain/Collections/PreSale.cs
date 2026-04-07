@@ -5,7 +5,7 @@ namespace CoinBank.Domain.Collections
 {
 
     [MonjoCollectionName("PreSales")]
-    public class PreSale : BaseDocument  
+    public class PreSale : BaseDocument
     {
         public string PreSaleReference { get; set; }
         public string Name { get; set; }
@@ -21,10 +21,12 @@ namespace CoinBank.Domain.Collections
         public DateTime StartSellingAt { get; set; }
         public DateTime EndSellingAt { get; set; }
         public List<PreSaleReleaseStep> ReleaseSchedule { get; set; }
-        public PreSaleState State { get; set; } 
+        public PreSaleState State { get; set; }
 
         public string RegisterHash { get; set; }
         public DateTime RegisterMoment { get; set; }
+
+        public bool IsOwnOrdersCompleted { get; set; } = false;
     }
 
     public class PreSaleReleaseStep
