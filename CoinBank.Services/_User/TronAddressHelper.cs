@@ -14,7 +14,6 @@ namespace CoinBank.Services._User
         /// <param name="signatureHex">The signature in hexadecimal format.</param>
         /// <returns>The recovered Tron address in Base58Check format.</returns>
         /// <exception cref="BadRequestException">Thrown when the address recovery fails.</exception>
-
         public static string RecoverTronAddress(string message, string signatureHex)
         {
             var signer = new EthereumMessageSigner();
@@ -34,7 +33,6 @@ namespace CoinBank.Services._User
         /// <param name="hexAddress">The Ethereum hex address.</param>
         /// <returns>The corresponding Tron address.</returns>
         /// <exception cref="BadRequestException">Thrown when the address length is invalid.</exception>
-
         public static string ConvertHexToTronAddress(string hexAddress)
         {
             if (hexAddress.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
@@ -58,7 +56,6 @@ namespace CoinBank.Services._User
         /// </summary>
         /// <param name="input">The input byte array.</param>
         /// <returns>The Base58Check encoded string.</returns>
-
         public static string Base58CheckEncode(byte[] input)
         {
             using var sha256 = System.Security.Cryptography.SHA256.Create();
@@ -78,7 +75,6 @@ namespace CoinBank.Services._User
         /// </summary>
         /// <param name="input">The input byte array.</param>
         /// <returns>The Base58 encoded string.</returns>
-
         public static string Base58Encode(byte[] input)
         {
             const string alphabet = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
