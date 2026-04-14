@@ -2,7 +2,7 @@
 using Nethereum.Contracts;
 using System.Numerics;
 
-namespace CoinBank.Services._BlockChain._MultiCallService.DTOs
+namespace CoinBank.Services._MultiCallService.DTOs
 {
 
     [Struct("Call")]

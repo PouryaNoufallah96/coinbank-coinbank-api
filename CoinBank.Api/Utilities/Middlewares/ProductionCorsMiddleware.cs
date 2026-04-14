@@ -1,6 +1,6 @@
 ﻿using _CodeAssistant.Exceptions;
 
-namespace SLT.Api.Utilities.Middlewares
+namespace CoinBank.Api.Utilities.Middlewares
 {
     public class ProductionCorsMiddleware(RequestDelegate next, ILogger<ProductionCorsMiddleware> _logger)
     {
@@ -21,11 +21,11 @@ namespace SLT.Api.Utilities.Middlewares
 
             var allowedOrigins = new[]
             {
-            "https://sltcargopay.com",
-            "https://api.sltcargopay.com",
-            "https://panel.sltcargopay.com",
-            "https://gate.sltcargopay.com",
-            "https://app.sltcargopay.com",
+            "https://coinbank.com",
+            "https://api.coinbank.com",
+            "https://panel.coinbank.com",
+            "https://gate.coinbank.com",
+            "https://app.coinbank.com",
             ""
             };
 
@@ -59,7 +59,7 @@ namespace SLT.Api.Utilities.Middlewares
             httpContext.Response.Headers.Append("X-Content-Type-Options", "nosniff");
             httpContext.Response.Headers.Append("X-XSS-Protection", "1; mode=block");
             httpContext.Response.Headers.Append("Content-Security-Policy",
-                "frame-ancestors 'self' https://slt.paytomoon.com https://panel.s.com https://api.s.com https://app.s.com");
+                "frame-ancestors 'self' https://coinbank.com https://panel.coinbank.com https://api.coinbank.com https://app.coinbank.com");
 
             httpContext.Response.Headers.Remove("server");
 

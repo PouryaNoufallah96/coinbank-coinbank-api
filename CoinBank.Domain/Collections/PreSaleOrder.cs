@@ -18,7 +18,7 @@ namespace CoinBank.Domain.Collections
 
         public decimal TokenPrice { get; set; }
         public decimal TokenAmount { get; set; }
-        public decimal TotalPrice { get; set; }
+        public decimal TotalValue { get; set; }
 
         public string RegisterHash { get; set; }
         public DateTime? RegisterMoment { get; set; } = null;

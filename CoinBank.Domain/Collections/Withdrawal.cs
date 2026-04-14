@@ -12,14 +12,17 @@ namespace CoinBank.Domain.Collections
         public string Symbol { get; set; }
         public string Network { get; set; }
         public decimal Amount { get; set; }
-        //public string DestinationWallet { get; set; } // cause amount return to wallet owner == WalletAdress
+        public string AmountInWei { get; set; } 
+        public string SourceReference { get; set; } // stake or pre sale order reference
         public WithdrawalType Type { get; set; }
         public WithdrawalState State { get; set; }
         public string RegisterHash { get; set; }
         public DateTime? RegisterMoment { get; set; } = null;
+        public decimal? Cost { get; set; } = null;
+        public string Hash { get; set; }
     }
 
-    public enum WithdrawalType { PreSale, StakeProof }
-    public enum WithdrawalState { Pending, Success, Failed }
+    public enum WithdrawalType { PreSale, StakeProfit , StakeWithdrawal } 
+    public enum WithdrawalState { NotRegistered, Success, Failed } 
 
 }

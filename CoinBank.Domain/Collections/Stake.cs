@@ -10,18 +10,22 @@ namespace CoinBank.Domain.Collections
         public string StakeReference { get; set; }
         public string UserPublicKey { get; set; }
         public string WalletAddress { get; set; }
-
         public string TokenSymbol { get; set; }
+        public string TokenName { get; set; }
+        public string TokenNetworkName { get; set; } 
         public decimal TokenAmount { get; set; }
-        public decimal EachMonthProfit { get; set; } 
-
-        public StakeType StakeType { get; set; }
-        public DateTime StartMoment { get; set; } 
+        public decimal TokenPrice { get; set; } 
+        public decimal EachMonthProfit { get; set; }
+        public decimal EachMonthProfitPercent { get; set; }
         public int MonthDuration { get; set; }
+        public DateTime StartMoment { get; set; }
         public DateTime EndMoment { get; set; }
-        public decimal EstimatedTotalProfitInToken { get; set; }
+        public decimal TotalProfitWithdrawn { get; set; } = 0;
+        public decimal TotalAmountWithdrawn { get; set; } = 0; 
+        public StakeState State { get; set; }
 
     }
+    public enum StakeState { NotRegistered, Active, Finished, Canceled }
 
-    public enum StakeType { OneYear, TwoYear };
+
 }

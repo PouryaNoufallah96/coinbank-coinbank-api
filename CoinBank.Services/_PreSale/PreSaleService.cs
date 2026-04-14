@@ -1,8 +1,10 @@
 ﻿using CoinBank.Domain.Collections;
 using CoinBank.Domain.Repositories.Contracts;
 using CoinBank.Services._PreSale.DTOs.Results;
+using CoinBank.Services._PreSale.DTOs.Storages;
 using CoinBank.Services._PreSale.DTOs.Updates;
 using CoinBank.Services._PreSaleOrder;
+using CoinBank.Services._PreSaleOrder.DTOs.Updates;
 using MongoDB.Driver;
 using MongoDB.Driver.Linq;
 using Utilities.DTOs;
@@ -11,8 +13,10 @@ using static Utilities.Constants.RegisterMode;
 
 namespace CoinBank.Services._PreSale
 {
-    public class PreSaleService(IPreSaleRepository _preSaleRepository,IPreSaleOrderService _preSaleOrderService) : IPreSaleService, IScopedDependency
-        
+    public class PreSaleService(IPreSaleRepository _preSaleRepository,
+        IPreSaleOrderRepository _preSaleOrderRepository,
+        PreSaleStorage _preSaleStorage) : IPreSaleService, IScopedDependency
+
     {
 
         public async Task<PreSaleResult> CreatePreSaleTokenAsync(CreatePreSaleTokenUpdate update)
@@ -20,10 +24,10 @@ namespace CoinBank.Services._PreSale
             ValidateCreateRequest(update);
             var symbol = update.Symbol.Trim().ToUpper();
 
-            var existing = await _preSaleRepository.AsQueryable().FirstOrDefaultAsync(q => q.Symbol== symbol);
+            var existing = await _preSaleRepository.AsQueryable().FirstOrDefaultAsync(q => q.Symbol == symbol && q.State == PreSaleState.Active);
 
             if (existing != null)
-                throw new BadRequestException("PreSale with this symbol already exists.");
+                throw new BadRequestException("Active PreSale with this symbol already exists.");
 
             var newPreSale = new PreSale
             {
@@ -40,10 +44,11 @@ namespace CoinBank.Services._PreSale
                 EndSellingAt = update.EndSellingAt,
                 ReleaseSchedule = update.ReleaseSchedule,
                 State = PreSaleState.Pending,
-                RegisterMoment = DateTime.UtcNow
+                RegisterMoment = null
             };
 
             //TODO : send to blockChain For submit
+            // use if in product
             newPreSale.RegisterHash = "";
             newPreSale.RegisterMoment = DateTime.UtcNow;
             newPreSale.State = PreSaleState.Active;
@@ -53,6 +58,34 @@ namespace CoinBank.Services._PreSale
             return MapToResult(newPreSale);
         }
 
+
+        public async Task<List<PreSaleUserStatResult>> GetUserPreSaleStatsAsync(string publicKey, string evmWalletAddress)
+        {
+            var query = _preSaleOrderRepository.AsQueryable().Where(x => x.State == PreSaleOrderState.InProgress || x.State == PreSaleOrderState.Completed);
+
+            if (string.IsNullOrWhiteSpace(publicKey) || publicKey == "guess")
+            {
+                query = query.Where(x => x.WalletAddress == evmWalletAddress);
+            }
+            else
+            {
+                query = query.Where(x => x.UserPublicKey == publicKey);
+            }
+
+            var userStats = await query
+                .GroupBy(x => x.PreSaleReference)
+                .Select(g => new PreSaleUserStatResult
+                {
+                    PreSaleReference = g.Key,
+                    OrderCount = g.Count(),
+                    TotalBought = g.Sum(x => x.TokenAmount)
+                })
+                .ToListAsync();
+
+            return userStats;
+        }
+
+
         public async Task<PreSaleResult> GetOnePreSaleTokenAsync(GetOnePreSaleTokenUpdate update)
         {
             var preSale = await _preSaleRepository.AsQueryable().FirstOrDefaultAsync(q => q.PreSaleReference == update.PreSaleReference) ??
@@ -61,7 +94,7 @@ namespace CoinBank.Services._PreSale
             return MapToResult(preSale);
         }
 
-        public async Task<PreSaleListResult> GetAllPreSaleTokensAsync(Pagination pagination)
+        public async Task<PreSaleListResult> GetAllPreSaleTokensForUserAsync(Pagination pagination, string publicKey, string evmWalletAddress)
         {
             var query = _preSaleRepository.AsQueryable();
 
@@ -71,28 +104,28 @@ namespace CoinBank.Services._PreSale
             var skip = (pagination.Page - 1) * pagination.Size;
 
             var data = await query
-                .OrderByDescending(q => q.CreatedMoment) 
+                .OrderByDescending(q => q.CreatedMoment)
                 .Skip(skip)
                 .Take(pagination.Size)
                 .Select(preSale => new PreSaleResult
                 {
-                   CreatedMoment = preSale.CreatedMoment,
-                   Description  = preSale.Description,
-                   EndSellingAt = preSale.EndSellingAt,
-                   LogoUrl = preSale.LogoUrl,
-                   MaxPerOrder = preSale.MaxPerOrder,
-                   MinPerOrder = preSale.MinPerOrder,
-                   ModifiedMoment = preSale.ModifiedMoment,
-                   Name = preSale.Name,
-                   PreSaleReference = preSale.PreSaleReference,
-                   Price = preSale.Price,
-                   ReleaseSchedule = preSale.ReleaseSchedule,
-                   StartSellingAt = preSale.StartSellingAt,
-                   State = preSale.State,
-                   Symbol = preSale.Symbol,
-                   TotalSupply = preSale.TotalSupply
+                    CreatedMoment = preSale.CreatedMoment,
+                    Description = preSale.Description,
+                    EndSellingAt = preSale.EndSellingAt,
+                    LogoUrl = preSale.LogoUrl,
+                    MaxPerOrder = preSale.MaxPerOrder,
+                    MinPerOrder = preSale.MinPerOrder,
+                    ModifiedMoment = preSale.ModifiedMoment,
+                    Name = preSale.Name,
+                    PreSaleReference = preSale.PreSaleReference,
+                    Price = preSale.Price,
+                    ReleaseSchedule = preSale.ReleaseSchedule,
+                    StartSellingAt = preSale.StartSellingAt,
+                    State = preSale.State,
+                    Symbol = preSale.Symbol,
+                    TotalSupply = preSale.TotalSupply
                 })
-                .ToListAsync(cancellationToken);
+                .ToListAsync();
 
             return new PreSaleListResult
             {
@@ -119,27 +152,73 @@ namespace CoinBank.Services._PreSale
             await _preSaleRepository.UpdateManyAsync(filter, update);
         }
 
-
-        public async Task SyncCompletedPreSalesAsync()
+        public async Task SyncPreSaleToStorageAsync(string preSaleReference)
         {
-            var now = DateTime.UtcNow;
+            var presale = await _preSaleRepository
+                .AsQueryable()
+                .FirstOrDefaultAsync(x => x.PreSaleReference == preSaleReference)
+                ?? throw new NotFoundException("PreSale not found!");
 
-            var presales = await _preSaleRepository.AsQueryable()
-                .Where(x => x.State == PreSaleState.Expired)
-                .Where(x => !x.IsOwnOrdersCompleted)
-                .Where(x => x.ReleaseSchedule != null && x.ReleaseSchedule.Any())
-                .Where(x => x.ReleaseSchedule.Max(r => r.ReleaseDate) <= now)
-                .ToListAsync();
 
-            foreach (var presale in presales)
+            var totalSupplied = await _preSaleOrderRepository
+                    .AsQueryable()
+                    .Where(q => q.PreSaleReference == preSaleReference)
+                    .Where(q => q.State == PreSaleOrderState.InProgress || q.State == PreSaleOrderState.Completed)
+                    .SumAsync(x => (decimal?)x.TokenAmount) ?? 0;
+
+            var data = new PreSaleData
             {
-                await _preSaleOrderService
-                    .MakeCompeletePreSaleOrderStateByPreSaleReferenceAsync(presale.PreSaleReference);
+                CreatedMoment = presale.CreatedMoment,
+                ModifiedMoment = presale.ModifiedMoment,
+                PreSaleReference = presale.PreSaleReference,
+                Name = presale.Name,
+                Symbol = presale.Symbol,
+                LogoUrl = presale.LogoUrl,
+                Description = presale.Description,
+                TotalSupply = presale.TotalSupply,
+                MaxPerOrder = presale.MaxPerOrder,
+                MinPerOrder = presale.MinPerOrder,
+                TotalSupplied = totalSupplied,
+                AvailableForEachOrder = Math.Min(presale.TotalSupply - totalSupplied, presale.MaxPerOrder),
+                Price = presale.Price,
+                StartSellingAt = presale.StartSellingAt,
+                EndSellingAt = presale.EndSellingAt,
+                ReleaseSchedule = presale.ReleaseSchedule,
+                State = presale.State,
+                LastUpdated = DateTime.UtcNow
+            };
 
-                presale.IsOwnOrdersCompleted = true;
-                await _preSaleRepository.ReplaceOneAsync(presale);
-            }
+            _preSaleStorage.Upsert(preSaleReference, data);
         }
+
+        public async Task<PreSale> GetPreSaleDataByReferenceForInternalUsageAsync(string preSaleReference)
+        {
+            return await _preSaleRepository.AsQueryable().FirstOrDefaultAsync(q => q.PreSaleReference == preSaleReference && q.State == PreSaleState.Active) ??
+                throw new NotFoundException("Active PreSale token not found!");
+        }
+
+
+        //public async Task SyncCompletedPreSalesAsync()
+        //{
+        //    var now = DateTime.UtcNow;
+
+        //    var presales = await _preSaleRepository.AsQueryable()
+        //        .Where(x => x.State == PreSaleState.Expired)
+        //        .Where(x => !x.IsOwnOrdersCompleted)
+        //        .Where(x => x.ReleaseSchedule != null && x.ReleaseSchedule.Any())
+        //        .Where(x => x.ReleaseSchedule.Max(r => r.ReleaseDate) <= now)
+        //        .ToListAsync();
+
+        //    foreach (var presale in presales)
+        //    {
+        //        await _preSaleOrderService
+        //            .MakeCompeletePreSaleOrderStateByPreSaleReferenceAsync(presale.PreSaleReference);
+
+        //        presale.IsOwnOrdersCompleted = true;
+        //        await _preSaleRepository.ReplaceOneAsync(presale);
+        //    }
+        //}
+
 
 
 
@@ -161,7 +240,7 @@ namespace CoinBank.Services._PreSale
                 EndSellingAt = entity.EndSellingAt,
                 ReleaseSchedule = entity.ReleaseSchedule,
                 State = entity.State,
-                CreatedMoment = entity.RegisterMoment,
+                CreatedMoment = entity.CreatedMoment,
                 ModifiedMoment = entity.ModifiedMoment
             };
         }
@@ -227,7 +306,7 @@ namespace CoinBank.Services._PreSale
             }
         }
 
-     
+
 
         #endregion
 

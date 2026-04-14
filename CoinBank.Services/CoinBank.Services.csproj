@@ -29,8 +29,8 @@
 
 	<ItemGroup>
 	  <Folder Include="_Common\Services\" />
-	  <Folder Include="_Stake\DTOs\Results\" />
-	  <Folder Include="_Stake\DTOs\Updates\" />
+	  <Folder Include="_PreSaleRelease\DTOs\Updates\" />
+	  <Folder Include="_Price\DTOs\Updates\" />
 	</ItemGroup>
 
 </Project>

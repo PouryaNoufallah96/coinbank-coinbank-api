@@ -3,10 +3,8 @@ using CoinBank.Services._User;
 using CoinBank.Services._User.DTOs.Results;
 using CoinBank.Services._User.DTOs.Storages;
 using CoinBank.Services._User.DTOs.Updates;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Swashbuckle.AspNetCore.Annotations;
-using System.Security.Cryptography.X509Certificates;
 using Utilities.Api;
 using Utilities.Attributes;
 using Utilities.Filters;
@@ -41,7 +39,7 @@ namespace CoinBank.Api.Controllers.V1
 
 
         [HttpPost("[action]")]
-        [Authorize]
+        [Authorize(RequireActiveUser = false)]
         [CustomRateLimit(maxAttemptsCount: 50)]
         [SwaggerOperation(Summary = "For getting User data", Tags = ["Auth"])]
         public async Task<GetUserResult> GetUserAsync()

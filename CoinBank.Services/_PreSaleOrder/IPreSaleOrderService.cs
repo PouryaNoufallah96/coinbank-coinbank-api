@@ -9,11 +9,11 @@ namespace CoinBank.Services._PreSaleOrder
         Task<PreSaleOrderListResult> GetPreSaleOrderHistoryAsync(GetPreSaleOrderHistoryUpdate update, string publicKey, string evmWalletAddress);
 
         //Task ActivatePreSaleOrderForInternalUsageAsync(); 
-        Task MakeCompeletePreSaleOrderStateByPreSaleReferenceAsync(string preSaleReference);
+        //Task MakeCompeletePreSaleOrderStateByPreSaleReferenceAsync(string preSaleReference);
 
 
         Task<List<PreSaleOrderWalletStatsResult>> GetWalletStatsAsync(GetPreSaleOrderWalletStatsUpdate update, string publicKey, string evmWalletAddress);
-
+        Task<PreSaleOrderDetailResult> GetOnePreSaleOrderDetailAsync(GetOnePreSaleOrderDetailUpdate update, string publicKey, string evmWalletAddress);
 
         //internal
         Task RemoveNotRegisteredPreSaleOrderAsync();

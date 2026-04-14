@@ -11,9 +11,9 @@ namespace CoinBank.Services._PreSaleOrder.DTOs.Results
         public string LogoUrl { get; set; }
         public string WalletAddress { get; set; }
         public decimal TokenPrice { get; set; }
-        public decimal TotalPrice { get; set; }
-        public decimal TokenAmount { get; set; } 
-        public decimal AvailableForWithdrawalAmount { get; set; } 
+        public decimal TokenAmount { get; set; }
+        public decimal TotalValue { get; set; }
+        public PreSaleOrderState State { get; set; }
         public List<PreSaleReleaseStep> ReleaseSchedule { get; set; }
     }
 }

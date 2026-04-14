@@ -21,5 +21,6 @@
         public string PoolName { get; set; }
         public int PriceDecimalPlaces { get; set; }
         public int AmountDecimalPlaces { get; set; }
+        //public string LogoUrl { get; set; }
     }
 }

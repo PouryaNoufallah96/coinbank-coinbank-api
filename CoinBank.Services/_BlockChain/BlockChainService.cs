@@ -1,7 +1,7 @@
-﻿using CoinBank.Services._BlockChain._MultiCallService;
-using CoinBank.Services._BlockChain._MultiCallService.DTOs;
-using CoinBank.Services._BlockChain.DTOs.Settings;
+﻿using CoinBank.Services._BlockChain.DTOs.Settings;
 using CoinBank.Services._Common.DTOs.Settings;
+using CoinBank.Services._MultiCallService;
+using CoinBank.Services._MultiCallService.DTOs;
 using Microsoft.Extensions.Logging;
 using Nethereum.ABI.FunctionEncoding;
 using Nethereum.ABI.Model;

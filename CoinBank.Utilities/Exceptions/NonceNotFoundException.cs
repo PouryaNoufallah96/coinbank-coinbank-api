@@ -1,4 +1,5 @@
-﻿using SLT.Utilities.Exceptions;
+﻿
+using CoinBank.Utilities.Exceptions;
 using Utilities.Enums;
 using Utilities.Exceptions.Common;
 

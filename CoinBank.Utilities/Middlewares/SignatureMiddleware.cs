@@ -15,7 +15,8 @@ namespace Utilities.Middlewares
         {
 
             if (context.Request.Path.StartsWithSegments("/hubs/prices") || 
-                context.Request.Path.StartsWithSegments("/hubs/NotifyWallet"))
+                context.Request.Path.StartsWithSegments("/hubs/presales") ||
+                context.Request.Path.StartsWithSegments("/api/v1/File/DownloadFile")) 
             {
                 await _next(context);
                 return;

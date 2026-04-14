@@ -1,11 +1,11 @@
-﻿using CoinBank.Services._BlockChain._MultiCallService.DTOs;
+﻿using CoinBank.Services._MultiCallService.DTOs;
 using Nethereum.Contracts.ContractHandlers;
 using Nethereum.RPC.Eth.DTOs;
 using Nethereum.Web3;
 using static Utilities.Constants.RegisterMode;
 
 
-namespace CoinBank.Services._BlockChain._MultiCallService
+namespace CoinBank.Services._MultiCallService
 {
     public class MultiCallService : IMultiCallService, IScopedDependency
     {

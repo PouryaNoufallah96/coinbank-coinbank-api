@@ -1,11 +1,15 @@
 ﻿using CoinBank.Domain.Collections;
 using CoinBank.Domain.Repositories.Contracts;
 using CoinBank.Services._BlockChain;
+using CoinBank.Services._PreSale;
 using CoinBank.Services._PreSaleOrder.DTOs.Results;
 using CoinBank.Services._PreSaleOrder.DTOs.Updates;
+using CoinBank.Services._PreSaleRelease;
+using Microsoft.CodeAnalysis;
 using Microsoft.IdentityModel.Tokens;
 using MongoDB.Driver;
 using MongoDB.Driver.Linq;
+using System.Xml.Linq;
 using Utilities.Exceptions.Common;
 using Utilities.Utilities;
 using static Utilities.Constants.RegisterMode;
@@ -13,7 +17,8 @@ using static Utilities.Constants.RegisterMode;
 namespace CoinBank.Services._PreSaleOrder
 {
     public class PreSaleOrderService(
-        IPreSaleRepository _preSaleRepository,
+        IPreSaleService _preSaleService,
+        IPreSaleReleaseService _preSaleReleaseService,
         IPreSaleOrderRepository _preSaleOrderRepository,
         IBlockChainService _blockChainService) : IPreSaleOrderService, IScopedDependency
     {
@@ -27,36 +32,47 @@ namespace CoinBank.Services._PreSaleOrder
         /// <returns></returns>
         public async Task<PreSaleOrderResult> CreatePreSaleOrderAsync(CreatePreSaleOrderUpdate update, string publicKey, string evmWalletAddress)
         {
-            var presale = await GetPreSaleDataBySymbolAsync(update.Symbol);
+            var presale = await _preSaleService
+                .GetPreSaleDataByReferenceForInternalUsageAsync(update.PreSaleReference);
 
-            var rzusdbalance = await _blockChainService.GetWalletAddressSingleTokenBalanceAsync(evmWalletAddress, "RZUSD");
-            decimal neededRzusdForPay = presale.Price * update.TokenAmount;
-            if (rzusdbalance < neededRzusdForPay)
-                throw new BadRequestException("Insufficient RZUSD balance!");
+            var userOrders = await GetUserActiveOrders(presale.PreSaleReference, publicKey);
 
-            var newPreSaleOrder = new PreSaleOrder
+            ValidateUserOrderCount(userOrders);
+
+            var userTotalAmount = userOrders.Sum(x => x.TokenAmount);
+            await ValidateOrderAmount(presale, update.TokenAmount, userTotalAmount);
+
+            await ValidateUserBalance(evmWalletAddress, presale.Price, update.TokenAmount);
+
+            var newOrder = new PreSaleOrder
             {
+                PreSaleOrderReference = Guid.NewGuid().ToString("N"),
                 PreSaleReference = presale.PreSaleReference,
-                Symbol = presale.Symbol.ToUpper(),
+                Symbol = presale.Symbol,
                 LogoUrl = presale.LogoUrl,
                 Name = presale.Name,
-                PreSaleOrderReference = Guid.NewGuid().ToString("N"),
-                PaidToken = null,
+                PaidToken = "RZUSD",
                 RegisterHash = null,
                 RegisterMoment = null,
                 UserPublicKey = publicKey,
                 WalletAddress = evmWalletAddress,
-                TokenPrice = presale.Price,
                 State = PreSaleOrderState.NotRegistered,
-                TotalPrice = presale.Price * update.TokenAmount,
+                TokenPrice = presale.Price,
+                TotalValue = presale.Price * update.TokenAmount,
                 TokenAmount = update.TokenAmount,
                 ReleaseSchedule = presale.ReleaseSchedule
             };
-            await _preSaleOrderRepository.InsertOneAsync(newPreSaleOrder);
-            return ConvertToResult(newPreSaleOrder);
+
+            //TODO : remove later
+            newOrder.State = PreSaleOrderState.InProgress;
+            await _preSaleOrderRepository.InsertOneAsync(newOrder);
+            //TODO : remove later
+            await _preSaleService.SyncPreSaleToStorageAsync(presale.PreSaleReference);
+
+            return ConvertToResult(newOrder);
         }
 
-
+        
         /// <summary>
         /// use for get user preSale history
         /// </summary>
@@ -146,7 +162,7 @@ namespace CoinBank.Services._PreSaleOrder
                         ReleaseSchedule = g.First().ReleaseSchedule,
 
                         TokenAmount = g.Sum(x => x.TokenAmount),
-                        TotalPrice = g.Sum(x => x.TotalPrice),
+                        TotalPrice = g.Sum(x => x.TotalValue),
                         OrderCount = g.Count()
                     })
                     .ToListAsync();
@@ -164,7 +180,7 @@ namespace CoinBank.Services._PreSaleOrder
                     ReleaseSchedule = x.ReleaseSchedule,
 
                     TokenAmount = x.TokenAmount,
-                    TotalPrice = x.TotalPrice,
+                    TotalPrice = x.TotalValue,
                     OrderCount = 1
                 })
                 .ToListAsync();
@@ -174,25 +190,78 @@ namespace CoinBank.Services._PreSaleOrder
 
 
         /// <summary>
-        /// this method is for preSale service 
+        /// use for get one pre sale order detail with transactions(releases)
         /// </summary>
-        /// <param name="preSaleReference"></param>
+        /// <param name="update"></param>
+        /// <param name="publicKey"></param>
+        /// <param name="evmWalletAddress"></param>
         /// <returns></returns>
-        public async Task MakeCompeletePreSaleOrderStateByPreSaleReferenceAsync(string preSaleReference)
+        /// <exception cref="NotFoundException"></exception>
+        public async Task<PreSaleOrderDetailResult> GetOnePreSaleOrderDetailAsync(GetOnePreSaleOrderDetailUpdate update, string publicKey, string evmWalletAddress)
         {
-            var now = DateTime.UtcNow;
-            var builder = Builders<PreSaleOrder>.Filter;
+            var query = _preSaleOrderRepository.AsQueryable().Where(x =>
+                    x.PreSaleOrderReference == update.PreSaleOrderReference);
 
-            var filter = builder.And(
-                builder.Eq(x => x.PreSaleReference, preSaleReference),
-                builder.Eq(x => x.State, PreSaleOrderState.InProgress)
-            );
+            if (string.IsNullOrWhiteSpace(publicKey) || publicKey == "guess")
+            {
+                query = query.Where(x => x.WalletAddress == evmWalletAddress);
+            }
+            else
+            {
+                query = query.Where(x => x.UserPublicKey == publicKey);
+            }
 
-            var update = Builders<PreSaleOrder>.Update
-                .Set(x => x.State, PreSaleOrderState.Completed);
+            var order = await query.FirstOrDefaultAsync() ?? throw new NotFoundException("PreSale order not found!");
 
-            await _preSaleOrderRepository.UpdateManyAsync(filter, update);
+            var releases = await _preSaleReleaseService
+                .GetReleasesOfPreSaleOrderByReferenceAsync(order.PreSaleOrderReference);
+
+            decimal totalReleased = releases
+                .Sum(x => x.ReleaseAmount);
+
+            decimal remainForRelease = order.TokenAmount - totalReleased;
+
+            return new PreSaleOrderDetailResult
+            {
+                CreatedMoment = order.CreatedMoment,
+                ModifiedMoment = order.ModifiedMoment,
+                PreSaleOrderReference = order.PreSaleOrderReference,
+                Name = order.Name,
+                Symbol = order.Symbol,
+                LogoUrl = order.LogoUrl,
+                WalletAddress = order.WalletAddress,
+                TokenPrice = order.TokenPrice,
+                TotalPrice = order.TotalValue,
+                TokenAmount = order.TokenAmount,
+                ReleaseSchedule = order.ReleaseSchedule,
+                ReleaseTransactions = releases,
+                RemainReleaseTokenAmount = remainForRelease,
+                TotalReleasedTokenAmount = totalReleased,
+                State = order.State
+            };
         }
+
+
+        ///// <summary>
+        ///// this method is for preSale service 
+        ///// </summary>
+        ///// <param name="preSaleReference"></param>
+        ///// <returns></returns>
+        //public async Task MakeCompeletePreSaleOrderStateByPreSaleReferenceAsync(string preSaleReference)
+        //{
+        //    var now = DateTime.UtcNow;
+        //    var builder = Builders<PreSaleOrder>.Filter;
+
+        //    var filter = builder.And(
+        //        builder.Eq(x => x.PreSaleReference, preSaleReference),
+        //        builder.Eq(x => x.State, PreSaleOrderState.InProgress)
+        //    );
+
+        //    var update = Builders<PreSaleOrder>.Update
+        //        .Set(x => x.State, PreSaleOrderState.Completed);
+
+        //    await _preSaleOrderRepository.UpdateManyAsync(filter, update);
+        //}
 
 
         /// <summary>
@@ -220,6 +289,7 @@ namespace CoinBank.Services._PreSaleOrder
             await _preSaleOrderRepository.DeleteManyAsync(x => ids.Contains(x.Id));
         }
 
+
         /// <summary>
         /// convertor method
         /// </summary>
@@ -227,21 +297,6 @@ namespace CoinBank.Services._PreSaleOrder
         /// <returns></returns>
         private PreSaleOrderResult ConvertToResult(PreSaleOrder preSaleOrder)
         {
-            decimal availableAmount = 0;
-
-            if (preSaleOrder.ReleaseSchedule != null && preSaleOrder.ReleaseSchedule.Any())
-            {
-                var now = DateTime.UtcNow;
-
-                foreach (var step in preSaleOrder.ReleaseSchedule)
-                {
-                    if (step.ReleaseDate <= now)
-                    {
-                        availableAmount += preSaleOrder.TokenAmount * step.Percentage / 100;
-                    }
-                }
-            }
-
             return new PreSaleOrderResult
             {
                 PreSaleOrderReference = preSaleOrder.PreSaleOrderReference,
@@ -250,26 +305,78 @@ namespace CoinBank.Services._PreSaleOrder
                 LogoUrl = preSaleOrder.LogoUrl,
                 WalletAddress = preSaleOrder.WalletAddress,
                 TokenPrice = preSaleOrder.TokenPrice,
-                TotalPrice = preSaleOrder.TotalPrice,
+                TotalValue = preSaleOrder.TotalValue,
                 TokenAmount = preSaleOrder.TokenAmount,
-                AvailableForWithdrawalAmount = availableAmount,
-                ReleaseSchedule = preSaleOrder.ReleaseSchedule
+                ReleaseSchedule = preSaleOrder.ReleaseSchedule,
+                State = preSaleOrder.State,
+                ModifiedMoment = preSaleOrder.ModifiedMoment,
+                CreatedMoment = preSaleOrder.CreatedMoment
             };
         }
 
-
-        /// <summary>
-        /// for get preSale data by reference
-        /// </summary>
-        /// <param name="symbol"></param>
-        /// <returns></returns>
-        /// <exception cref="NotFoundException"></exception>
-        private async Task<PreSale> GetPreSaleDataBySymbolAsync(string symbol)
+        private async Task ValidateUserBalance(string wallet, decimal price, decimal amount)
         {
-            return await _preSaleRepository.AsQueryable().FirstOrDefaultAsync(q => q.Symbol.ToLower() == symbol.ToLower()) ??
-                throw new NotFoundException("PreSale token not found!");
+            var balance = await _blockChainService
+                .GetWalletAddressSingleTokenBalanceAsync(wallet, "RZUSD");
+
+            var required = price * amount;
+
+            if (balance < required)
+                throw new BadRequestException("Insufficient RZUSD balance!");
         }
 
+        private async Task<List<PreSaleOrder>> GetUserActiveOrders(string preSaleReference, string publicKey)
+        {
+            return await _preSaleOrderRepository.AsQueryable()
+                .Where(x => x.PreSaleReference == preSaleReference &&
+                            x.UserPublicKey == publicKey &&
+                           (x.State == PreSaleOrderState.InProgress || x.State == PreSaleOrderState.Completed))
+                .ToListAsync() ?? [];
+        }
+
+        private void ValidateUserOrderCount(List<PreSaleOrder> orders)
+        {
+            if (orders.Count >= 5)
+                throw new BadRequestException("maximum order for each token is 5");
+        }
+
+        private async Task<decimal> GetTotalSoldAmount(string preSaleReference)
+        {
+            return await _preSaleOrderRepository.AsQueryable()
+                .Where(x => x.PreSaleReference == preSaleReference &&
+                       (x.State == PreSaleOrderState.InProgress || x.State == PreSaleOrderState.Completed))
+                .SumAsync(x => (decimal?)x.TokenAmount) ?? 0;
+        }
+
+        private async Task ValidateOrderAmount(
+         PreSale preSale,
+         decimal requestAmount,
+         decimal userTotalAmount)
+        {
+            // min/max per order
+            if (requestAmount < preSale.MinPerOrder)
+                throw new BadRequestException($"Minimum amount is {preSale.MinPerOrder} {preSale.Symbol}");
+
+            if (requestAmount > preSale.MaxPerOrder)
+                throw new BadRequestException($"Maximum amount is {preSale.MaxPerOrder} {preSale.Symbol}");
+
+            // user remaining quota
+            var userRemain = preSale.MaxPerOrder - userTotalAmount;
+            if (requestAmount > userRemain)
+                throw new BadRequestException($"Your remaining quota is {userRemain} {preSale.Symbol}");
+
+
+            var totalSold = await GetTotalSoldAmount(preSale.PreSaleReference);
+
+            // total supply check
+            var remainingSupply = preSale.TotalSupply - totalSold;
+
+            if (remainingSupply <= 0)
+                throw new BadRequestException("PreSale is sold out");
+
+            if (requestAmount > remainingSupply)
+                throw new BadRequestException($"Remaining total supply is {remainingSupply} {preSale.Symbol}");
+        }
 
 
 
