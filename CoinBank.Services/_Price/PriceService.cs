@@ -17,17 +17,12 @@ namespace CoinBank.Services._Price
         private static readonly HttpClient _httpClient = new HttpClient();
          
 
-        public async Task<PriceResult> FetchTokenPriceForShieldAsync(string tokenName)
-        {
-            var priceData = _priceStorage.GetPrice(tokenName.ToUpper());
-            if (priceData != null && priceData.Price != null) return priceData.Price;
-            return await FetchTokenPriceAsync(tokenName.ToUpper());
-        }
 
         public async Task<PriceResult> FetchTokenPriceAsync(string tokenName)
         {
             try
             {
+                
                 return await FetchTokenPriceFromGeckoTerminalAsync(tokenName);
 
             }
@@ -132,6 +127,7 @@ namespace CoinBank.Services._Price
         public async Task<PriceResult> FetchTokenPriceFromGeckoTerminalAsync(string tokenName, string poolId = null)
         {
             var pool = poolId == null ? _availableTokenDatas.FirstOrDefault(q => q.Name == tokenName.ToUpper()).PoolId : poolId;
+            var network = _availableTokenDatas.FirstOrDefault(q => q.Name == tokenName.ToUpper()).Network;
             string url = $"https://api.geckoterminal.com/api/v2/networks/bsc/pools/{pool}";
 
             try
@@ -159,7 +155,7 @@ namespace CoinBank.Services._Price
                 return new PriceResult
                 {
                     TokenName = tokenName,
-                    TokenNetwork = "BSC",
+                    TokenNetwork = network,
                     Price = basePrice,
                     ChangePrice24hPercentage = changePrice24h,
                 };

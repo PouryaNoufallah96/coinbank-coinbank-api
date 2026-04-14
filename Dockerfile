@@ -3,4 +3,4 @@ WORKDIR /app
 EXPOSE 80
 EXPOSE 443
 ADD ./publish/ .
-ENTRYPOINT ["dotnet", "SLT.Api.dll"]
+ENTRYPOINT ["dotnet", "CoinBank.Api.dll"]

@@ -3,13 +3,12 @@
 
 
 
-IMAGE_NAME="slt.api"
-CONTAINER_NAME="api.sltcargopay.com"
-
+IMAGE_NAME="coinbank.api"
+CONTAINER_NAME="cb.paytomoon.com"
 
 echo "Building and publishing the project..."
-dotnet build SLT.Api/SLT.Api.csproj -c Release
-dotnet publish SLT.Api/SLT.Api.csproj -c Release -o publish
+dotnet build CoinBank.Api/CoinBank.Api.csproj -c Release
+dotnet publish CoinBank.Api/CoinBank.Api.csproj -c Release -o publish
 
 echo " Building Docker image..."
 docker build -t $IMAGE_NAME .
