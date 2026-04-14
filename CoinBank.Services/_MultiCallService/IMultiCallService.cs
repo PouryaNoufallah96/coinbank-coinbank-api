@@ -1,6 +1,6 @@
-﻿using CoinBank.Services._BlockChain._MultiCallService.DTOs;
+﻿using CoinBank.Services._MultiCallService.DTOs;
 
-namespace CoinBank.Services._BlockChain._MultiCallService;
+namespace CoinBank.Services._MultiCallService;
 
 public interface IMultiCallService
 {

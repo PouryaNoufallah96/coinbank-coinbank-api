@@ -24,9 +24,7 @@ namespace CoinBank.Domain.Collections
         public PreSaleState State { get; set; }
 
         public string RegisterHash { get; set; }
-        public DateTime RegisterMoment { get; set; }
-
-        public bool IsOwnOrdersCompleted { get; set; } = false;
+        public DateTime? RegisterMoment { get; set; }
     }
 
     public class PreSaleReleaseStep

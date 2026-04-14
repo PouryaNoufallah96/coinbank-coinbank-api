@@ -1,6 +1,7 @@
-﻿using Utilities.Enums;
+﻿using CoinBank.Utilities.Exceptions;
+using Utilities.Enums;
 using Utilities.Exceptions.Common;
-using SLT.Utilities.Exceptions;
+
 
 namespace Utilities.Exceptions
 {

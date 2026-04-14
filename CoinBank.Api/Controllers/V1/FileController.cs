@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using Utilities.Api;
 using Utilities.Attributes;
 using Utilities.Filters;
+using Utilities.Permissions;
 
 namespace CoinHalls.Api.Controllers.V1
 {
@@ -27,7 +28,7 @@ namespace CoinHalls.Api.Controllers.V1
         [HttpPost("[action]")]
         [FileSizeLimit(15 * 1024 * 1024)]
         [Security(disable: true)]
-        //[Authorize]
+        [Authorize(Permissions.PreSaleManage)]
         public async Task<string> UploadFileAsync([FromQuery] string fileName, IFormFile file)
         {
             //if (WalletAddress.ToLower() != "admin wallet") throw new BadRequestException("you can not upload game image");
@@ -36,7 +37,7 @@ namespace CoinHalls.Api.Controllers.V1
 
 
         [HttpDelete("[action]")]
-        //[authorize]
+        [Authorize(Permissions.PreSaleManage)]
         public bool Deletefile([FromRoute] string filename)
         {
             //if (walletaddress.tolower() != "admin wallet") throw new badrequestexception("you can not remove game image");

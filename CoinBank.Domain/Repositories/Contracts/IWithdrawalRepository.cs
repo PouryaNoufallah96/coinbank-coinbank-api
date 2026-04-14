@@ -5,5 +5,8 @@ namespace CoinBank.Domain.Repositories.Contracts
 {
     public interface IWithdrawalRepository : IMonjoRepository<Withdrawal>
     {
+
+       
     }
+
 }

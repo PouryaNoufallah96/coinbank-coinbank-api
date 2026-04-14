@@ -1,13 +1,13 @@
-﻿using SLT.Services._Log.DTOs.Updates;
-using SLT.Services._Log;
-using System.Text;
+﻿using System.Text;
 using System.Text.Json;
 using Utilities.Services.Contracts;
 using Utilities.Enums;
 using Utilities.Utilities;
 using Utilities.Extension;
+using CoinBank.Services._Log;
+using CoinBank.Services._Log.DTOs.Updates;
 
-namespace SLT.Api.Utilities.Middlewares
+namespace CoinBank.Api.Utilities.Middlewares
 {
     public class RequestLoggingMiddleware(RequestDelegate _next, ILogService _logService, IJwtService _jwtService)
     {

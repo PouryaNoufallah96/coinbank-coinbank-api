@@ -1,4 +1,4 @@
-﻿namespace SLT.Api.Utilities.Middlewares
+﻿namespace CoinBank.Api.Utilities.Middlewares
 { 
     public static class ApplicationControllerBuilderExtensions
     {
