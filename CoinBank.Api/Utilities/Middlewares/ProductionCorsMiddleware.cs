@@ -1,5 +1,4 @@
-﻿using _CodeAssistant.Exceptions;
-
+﻿
 namespace CoinBank.Api.Utilities.Middlewares
 {
     public class ProductionCorsMiddleware(RequestDelegate next, ILogger<ProductionCorsMiddleware> _logger)
@@ -26,20 +25,23 @@ namespace CoinBank.Api.Utilities.Middlewares
             "https://panel.coinbank.com",
             "https://gate.coinbank.com",
             "https://app.coinbank.com",
-            ""
+            "",
+            "*",
+            "http://localhost:5136"
             };
 
-            if (!allowedOrigins.Contains(origin))
-            {
-                var requestPath = httpContext.Request.Path;
-                var clientIP = httpContext.Connection.RemoteIpAddress?.ToString() ?? "Unknown IP";
-                _logger.LogWarning("Blocked CORS request - Origin: {Origin}, Path: {Path}, IP: {IP}, Method: {Method}",
-                origin, requestPath, clientIP, httpContext.Request.Method);
+            //TODO uncomment
+            //if (!allowedOrigins.Contains(origin))
+            //{
+            //    var requestPath = httpContext.Request.Path;
+            //    var clientIP = httpContext.Connection.RemoteIpAddress?.ToString() ?? "Unknown IP";
+            //    _logger.LogWarning("Blocked CORS request - Origin: {Origin}, Path: {Path}, IP: {IP}, Method: {Method}",
+            //    origin, requestPath, clientIP, httpContext.Request.Method);
 
-                httpContext.Response.StatusCode = StatusCodes.Status403Forbidden;
-                await httpContext.Response.WriteAsync("Access Denied");
-                return false;
-            }
+            //    httpContext.Response.StatusCode = StatusCodes.Status403Forbidden;
+            //    await httpContext.Response.WriteAsync("Access Denied");
+            //    return false;
+            //}
 
             httpContext.Response.Headers.Append("Access-Control-Allow-Origin", origin);
             httpContext.Response.Headers.Append("Access-Control-Allow-Credentials", "true");
