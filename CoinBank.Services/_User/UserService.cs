@@ -392,9 +392,12 @@ namespace CoinBank.Services._User
                  new(Claims.UserType.ToDisplay(),user.Role == UserRole.Customer ? UserType.User.ToString() : UserType.Admin.ToString()),
              };
 
-                claims.AddRange(user.Permissions.Select(permission =>
-                    new Claim(Claims.Permission.ToDisplay(), permission)));
+                if (user.Permissions != null && user.Permissions.Any())
+                {
 
+                    claims.AddRange(user.Permissions.Select(permission =>
+                        new Claim(Claims.Permission.ToDisplay(), permission)));
+                }
                 return claims;
             }
             catch (Exception ex)
