@@ -137,7 +137,7 @@ namespace CoinBank.Services._User
                 Status = UserStatus.NotVerified,
                 SecurityStamp = "-",
                 Role = UserRole.Customer,
-                Id = "guess"
+                UserPublicKey = "guess"
             };
 
             switch (update.WalletType)
