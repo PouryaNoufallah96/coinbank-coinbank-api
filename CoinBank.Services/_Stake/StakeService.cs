@@ -6,6 +6,7 @@ using CoinBank.Services._Price;
 using CoinBank.Services._Stake.DTOs.Results;
 using CoinBank.Services._Stake.DTOs.Settings;
 using CoinBank.Services._Stake.DTOs.Updates;
+using CoinBank.Services._Withdrawal.DTOs.Results;
 using MongoDB.Driver;
 using MongoDB.Driver.Linq;
 using Utilities.Exceptions.Common;
@@ -35,7 +36,6 @@ namespace CoinBank.Services._Stake
         {
             if (update == null)
                 throw new BadRequestException("Request body is required");
-
 
 
             var symbol = update.Symbol.Trim().ToUpper();
@@ -72,6 +72,7 @@ namespace CoinBank.Services._Stake
                 WalletAddress = evmWalletAddress,
                 TokenSymbol = symbol,
                 TokenAmount = update.Amount,
+                StartAmount = update.Amount,
                 TokenPrice = tokenPrice,
                 TokenName = tokenData.PoolName,
                 EachMonthProfitPercent = plan.MonthlyProfitPercent,
@@ -192,9 +193,99 @@ namespace CoinBank.Services._Stake
             return list;
         }
 
-      
 
-     
+
+        /// <summary>
+        /// use for get stake detail
+        /// </summary>
+        /// <param name="update"></param>
+        /// <param name="publicKey"></param>
+        /// <param name="evmWalletAddress"></param>
+        /// <returns></returns>
+        /// <exception cref="NotFoundException"></exception>
+        /// <exception cref="BadRequestException"></exception>
+        public async Task<StakeDetailResult> GetStakeDetailAsync( StakeDetailUpdate update, string publicKey, string evmWalletAddress)
+        {
+            
+            var stake = await _stakeRepository.AsQueryable()
+                .FirstOrDefaultAsync(q => q.StakeReference == update.StakeReference)
+                ?? throw new NotFoundException("Stake not found!");
+
+            if (!string.IsNullOrWhiteSpace(publicKey) && publicKey != "guess")
+            {
+                if (stake.UserPublicKey != publicKey) throw new BadRequestException("Access denied");
+            }
+            else
+            {
+                if (stake.WalletAddress != evmWalletAddress)
+                    throw new BadRequestException("Access denied");
+            }
+
+
+            var result = ConvertToDetailResult(stake);
+
+            var now = DateTime.UtcNow;
+
+            var lastStakeWithdrawal = await _withdrawalRepository.AsQueryable()
+                .Where(w =>
+                    w.StakeReference == stake.StakeReference &&
+                    w.Type == WithdrawalType.StakeWithdrawal &&
+                    w.State == WithdrawalState.Success)
+                .OrderByDescending(w => w.RegisterMoment)
+                .FirstOrDefaultAsync();
+
+            var profitStartDate = lastStakeWithdrawal?.RegisterMoment ?? stake.StartMoment;
+
+            var passedMonths = GetPassedFullMonths(profitStartDate, now);
+            decimal availableProfit = 0;
+
+            if (passedMonths > 0)
+            {
+                var monthlyProfit =
+                    stake.TokenAmount * (stake.EachMonthProfitPercent / 100m);
+
+                availableProfit = monthlyProfit * passedMonths;
+            }
+
+            result.AvailableProfitForWithdraw = availableProfit;
+
+          
+            var withdrawals = await _withdrawalRepository.AsQueryable()
+                .Where(w => w.StakeReference == stake.StakeReference)
+                .OrderByDescending(w => w.CreatedMoment)
+                .ToListAsync();
+
+            result.Withrawals = withdrawals.Select(w => new WithdrawalResult
+            {
+                WithdrawalRerefence = w.WithdrawalRerefence,
+                UserPublicKey = w.UserPublicKey,
+                WalletAddress = w.WalletAddress,
+                Symbol = w.Symbol,
+                Network = w.Network,
+                Amount = w.Amount,
+                ProfitAmount = w.ProfitAmount,
+                Cost = w.Cost,
+                FinalAmount = w.FinalAmount,
+                FinalAmountInWei = w.FinalAmountInWei,
+                Type = w.Type,
+                State = w.State,
+                CreatedMoment =  w.CreatedMoment,
+                ModifiedMoment = w.ModifiedMoment
+            }).ToList(); 
+
+            return result;
+        }
+
+        private int GetPassedFullMonths(DateTime start, DateTime now)
+        {
+            int months = (now.Year - start.Year) * 12 + (now.Month - start.Month);
+
+            if (now.Day < start.Day)
+                months--;
+
+            return Math.Max(0, months);
+        }
+
 
 
         /// <summary>
@@ -206,6 +297,31 @@ namespace CoinBank.Services._Stake
         {
 
             return new StakeResult
+            {
+                StakeReference = stake.StakeReference,
+                UserPublicKey = stake.UserPublicKey,
+                WalletAddress = stake.WalletAddress,
+                TokenSymbol = stake.TokenSymbol,
+                TokenName = stake.TokenName,
+                TokenAmount = stake.TokenAmount,
+                TokenPrice = stake.TokenPrice,
+                MonthDuration = stake.MonthDuration,
+                StartMoment = stake.StartMoment,
+                EndMoment = stake.EndMoment,
+                TotalProfitWithdrawn = stake.TotalProfitWithdrawn,
+                TotalAmountWithdrawn = stake.TotalAmountWithdrawn,
+                State = stake.State,
+                EachMonthProfit = stake.EachMonthProfit,
+                EachMonthProfitPercent = stake.EachMonthProfitPercent,
+                CreatedMoment = stake.CreatedMoment,
+                ModifiedMoment = stake.ModifiedMoment,
+            };
+
+        }
+        public StakeDetailResult ConvertToDetailResult(Stake stake)
+        {
+
+            return new StakeDetailResult
             {
                 StakeReference = stake.StakeReference,
                 UserPublicKey = stake.UserPublicKey,
@@ -242,5 +358,6 @@ namespace CoinBank.Services._Stake
             return tokenData;
         }
 
+       
     }
 }

@@ -55,6 +55,8 @@ namespace CoinBank.Services._PreSale
 
             await _preSaleRepository.InsertOneAsync(newPreSale);
 
+
+            await SyncPreSaleToStorageAsync(newPreSale);
             return MapToResult(newPreSale);
         }
 
@@ -139,17 +141,28 @@ namespace CoinBank.Services._PreSale
         {
             var now = DateTime.UtcNow;
 
-            var builder = Builders<PreSale>.Filter;
+           
+            var expiredPreSales = await _preSaleRepository
+                .AsQueryable()
+                .Where(x => x.State == PreSaleState.Active && x.EndSellingAt < now)
+                .ToListAsync();
 
-            var filter = builder.And(
-                builder.Eq(x => x.State, PreSaleState.Active),
-                builder.Lt(x => x.EndSellingAt, now)
-            );
+            if (!expiredPreSales.Any())
+                return;
 
-            var update = Builders<PreSale>.Update
-                .Set(x => x.State, PreSaleState.Expired);
+            
+            foreach (var preSale in expiredPreSales)
+            {
+                var update = Builders<PreSale>.Update
+                    .Set(x => x.State, PreSaleState.Expired);
 
-            await _preSaleRepository.UpdateManyAsync(filter, update);
+                await _preSaleRepository.FindOneAndUpdateAsync(
+                    x => x.PreSaleReference == preSale.PreSaleReference,
+                    update
+                );
+
+                await SyncPreSaleToStorageAsync(preSale.PreSaleReference);
+            }
         }
 
         public async Task SyncPreSaleToStorageAsync(string preSaleReference)
@@ -160,6 +173,41 @@ namespace CoinBank.Services._PreSale
                 ?? throw new NotFoundException("PreSale not found!");
 
 
+            var totalSupplied = await _preSaleOrderRepository
+                    .AsQueryable()
+                    .Where(q => q.PreSaleReference == preSaleReference)
+                    .Where(q => q.State == PreSaleOrderState.InProgress || q.State == PreSaleOrderState.Completed)
+                    .SumAsync(x => (decimal?)x.TokenAmount) ?? 0;
+
+            var data = new PreSaleData
+            {
+                CreatedMoment = presale.CreatedMoment,
+                ModifiedMoment = presale.ModifiedMoment,
+                PreSaleReference = presale.PreSaleReference,
+                Name = presale.Name,
+                Symbol = presale.Symbol,
+                LogoUrl = presale.LogoUrl,
+                Description = presale.Description,
+                TotalSupply = presale.TotalSupply,
+                MaxPerOrder = presale.MaxPerOrder,
+                MinPerOrder = presale.MinPerOrder,
+                TotalSupplied = totalSupplied,
+                AvailableForEachOrder = Math.Min(presale.TotalSupply - totalSupplied, presale.MaxPerOrder),
+                Price = presale.Price,
+                StartSellingAt = presale.StartSellingAt,
+                EndSellingAt = presale.EndSellingAt,
+                ReleaseSchedule = presale.ReleaseSchedule,
+                State = presale.State,
+                LastUpdated = DateTime.UtcNow
+            };
+
+            _preSaleStorage.Upsert(preSaleReference, data);
+        }
+
+        public async Task SyncPreSaleToStorageAsync(PreSale presale)
+        {
+
+            var preSaleReference = presale.PreSaleReference;
             var totalSupplied = await _preSaleOrderRepository
                     .AsQueryable()
                     .Where(q => q.PreSaleReference == preSaleReference)
@@ -222,7 +270,11 @@ namespace CoinBank.Services._PreSale
 
 
 
+
+
         #region Privates
+
+  
         private PreSaleResult MapToResult(PreSale entity)
         {
             return new PreSaleResult
