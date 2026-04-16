@@ -5,9 +5,9 @@ namespace CoinBank.Services._Withdrawal
 {
     public interface IWithdrawalService
     {
-        Task SyncStakeWithdrawalsAsync(string stakeReference, bool syncProfit, bool syncAmount);
-        //Task<WithdrawalResult> WithdrawStakeProfitAsync(WithdrawStakeProfitUpdate update, string publicKey, string evmWalletAddress);
-        //Task<WithdrawalResult> WithdrawStakeAmountAsync(WithdrawStakeAmountUpdate update, string publicKey, string evmWalletAddress);
+        Task<WithdrawalResult> WithdrawStakeProfitAsync(WithdrawStakeProfitUpdate update, string publicKey, string evmWalletAddress);
+        Task<WithdrawalResult> WithdrawStakeAmountAsync(WithdrawStakeAmountUpdate update, string publicKey, string evmWalletAddress);
 
+        Task SyncStakeWithdrawalsAsync(string stakeReference, bool syncProfit, bool syncAmount);
     }
 }

@@ -1,6 +1,5 @@
 ﻿using CoinBank.Services._Stake.DTOs.Results;
 using CoinBank.Services._Stake.DTOs.Updates;
-using CoinBank.Services._Withdrawal.DTOs.Updates;
 
 namespace CoinBank.Services._Stake
 {
@@ -8,6 +7,7 @@ namespace CoinBank.Services._Stake
     {
         Task<StakeResult> CreateStakeAsync(CreateStakeUpdate update, string publicKey, string evmWalletAddress);
         Task<StakeListResult> GetStakeHistoryAsync(StakeHistoryUpdate update, string publicKey, string evmWalletAddress);
+        Task<StakeDetailResult> GetStakeDetailAsync(StakeDetailUpdate update, string publicKey, string evmWalletAddress);
         Task<List<StakeWalletStatsResult>> GetWalletStatsAsync(GetStakeWalletStatsUpdate update, string publicKey, string evmWalletAddress);
     }
 }

@@ -7,22 +7,24 @@ namespace CoinBank.Domain.Collections
     public class Withdrawal : BaseDocument
     {
         public string WithdrawalRerefence { get; set; }
+        public string StakeReference { get; set; }
         public string UserPublicKey { get; set; }
         public string WalletAddress { get; set; }
         public string Symbol { get; set; }
         public string Network { get; set; }
         public decimal Amount { get; set; }
-        public string AmountInWei { get; set; } 
-        public string SourceReference { get; set; } // stake or pre sale order reference
+        public decimal ProfitAmount { get; set; }
+        public decimal Cost { get; set; } = 0;
+        public decimal FinalAmount { get; set; }
+        public string FinalAmountInWei { get; set; }
         public WithdrawalType Type { get; set; }
         public WithdrawalState State { get; set; }
         public string RegisterHash { get; set; }
         public DateTime? RegisterMoment { get; set; } = null;
-        public decimal? Cost { get; set; } = null;
         public string Hash { get; set; }
     }
 
-    public enum WithdrawalType { PreSale, StakeProfit , StakeWithdrawal } 
-    public enum WithdrawalState { NotRegistered, Success, Failed } 
+    public enum WithdrawalType { StakeProfit, StakeWithdrawal }
+    public enum WithdrawalState { NotRegistered, Success, Failed }
 
 }
