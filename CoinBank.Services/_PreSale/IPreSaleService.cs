@@ -17,6 +17,7 @@ namespace CoinBank.Services._PreSale
         Task<PreSaleResult> GetOnePreSaleTokenAsync(GetOnePreSaleTokenUpdate update);
         Task<List<PreSaleUserStatResult>> GetUserPreSaleStatsAsync(string publicKey, string evmWalletAddress);
         //internal
+        Task InitializePreSaleStorageAsync();
         Task SyncExpirePreSaleTokenAsync();
         Task SyncPreSaleToStorageAsync(string preSaleReference);
         Task<PreSale> GetPreSaleDataByReferenceForInternalUsageAsync(string preSaleReference);

@@ -246,6 +246,84 @@ namespace CoinBank.Services._PreSale
         }
 
 
+        public async Task InitializePreSaleStorageAsync()
+        {
+
+            var presales = await _preSaleRepository
+                .AsQueryable().
+                Where(q => q.State == PreSaleState.Active ||  q.State == PreSaleState.Expired)
+                .ToListAsync();
+
+            if (presales == null || presales.Count == 0)
+            {
+                _preSaleStorage.Init(new List<PreSaleData>());
+                return;
+            }
+
+       
+            var ordersGrouped = await _preSaleOrderRepository
+                .AsQueryable()
+                .Where(x =>
+                    x.State == PreSaleOrderState.InProgress ||
+                    x.State == PreSaleOrderState.Completed)
+                .GroupBy(x => x.PreSaleReference)
+                .Select(g => new
+                {
+                    PreSaleReference = g.Key,
+                    TotalSupplied = g.Sum(x => (decimal?)x.TokenAmount) ?? 0
+                })
+                .ToListAsync();
+
+            var ordersDict = ordersGrouped
+                .ToDictionary(x => x.PreSaleReference, x => x.TotalSupplied);
+
+     
+            var storageList = new List<PreSaleData>();
+
+            foreach (var presale in presales)
+            {
+                ordersDict.TryGetValue(presale.PreSaleReference, out var totalSupplied);
+
+                var availableForEachOrder =
+                    Math.Min(
+                        presale.TotalSupply - totalSupplied,
+                        presale.MaxPerOrder
+                    );
+
+                var data = new PreSaleData
+                {
+                    CreatedMoment = presale.CreatedMoment,
+                    ModifiedMoment = presale.ModifiedMoment,
+                    PreSaleReference = presale.PreSaleReference,
+                    Name = presale.Name,
+                    Symbol = presale.Symbol,
+                    LogoUrl = presale.LogoUrl,
+                    Description = presale.Description,
+
+                    TotalSupply = presale.TotalSupply,
+                    MaxPerOrder = presale.MaxPerOrder,
+                    MinPerOrder = presale.MinPerOrder,
+
+                    TotalSupplied = totalSupplied,
+                    AvailableForEachOrder = availableForEachOrder,
+
+                    Price = presale.Price,
+                    StartSellingAt = presale.StartSellingAt,
+                    EndSellingAt = presale.EndSellingAt,
+                    ReleaseSchedule = presale.ReleaseSchedule,
+
+                    State = presale.State,
+                    LastUpdated = DateTime.UtcNow
+                };
+
+                storageList.Add(data);
+            }
+
+            _preSaleStorage.Init(storageList);
+        }
+
+
+
         //public async Task SyncCompletedPreSalesAsync()
         //{
         //    var now = DateTime.UtcNow;
@@ -274,7 +352,7 @@ namespace CoinBank.Services._PreSale
 
         #region Privates
 
-  
+
         private PreSaleResult MapToResult(PreSale entity)
         {
             return new PreSaleResult
