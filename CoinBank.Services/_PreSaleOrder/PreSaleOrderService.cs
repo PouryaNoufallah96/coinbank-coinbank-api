@@ -90,7 +90,9 @@ namespace CoinBank.Services._PreSaleOrder
                 query = query.Where(q => q.Symbol == update.Symbol.ToUpper());
             }
 
-            if (string.IsNullOrWhiteSpace(publicKey) || publicKey == "guess")
+            if (string.IsNullOrWhiteSpace(publicKey)) throw new BadRequestException("Access denied!");
+
+            if (publicKey == "guess")
             {
                 query = query.Where(x =>
                     x.WalletAddress == evmWalletAddress &&
