@@ -42,7 +42,7 @@ namespace CoinBank.Services._User
         public NonceResult GetNonce(NonceRequest update, string ip)
         {
             ValidateClientInfo(update.ClientId, update.ClientSecret);
-            var walletAddress = ValidateAndConvertToChecksumAddress(update.WalletAddress,update.WalletType);
+            var walletAddress = ValidateAndConvertToChecksumAddress(update.WalletAddress, update.WalletType);
             var walletType = update.WalletType;
             var random = _randomService.GetSecureAlphaNumericString(6);
             var newNonce = random + Guid.NewGuid().ToString("N");
@@ -113,7 +113,7 @@ namespace CoinBank.Services._User
                     EVMWalletAddress = user.EVMWalletAddress,
                     TronWalletAddress = user.TronWalletAddress,
                     LoginHistories = user.LoginDates
-                }; 
+                };
         }
 
 
@@ -130,7 +130,7 @@ namespace CoinBank.Services._User
         public async Task<ActionResult> GetTokenWithPureWalletAddress(GetTokenWithPureWalletAddress update, string ip)
         {
             ValidateClientInfo(update.ClientId, update.ClientSecret);
-            var walletAddress = ValidateAndConvertToChecksumAddress(update.WalletAddress,update.WalletType);
+            var walletAddress = ValidateAndConvertToChecksumAddress(update.WalletAddress, update.WalletType);
 
             var user = new User
             {
@@ -421,11 +421,11 @@ namespace CoinBank.Services._User
             var query = _userRepository.AsQueryable();
             if (walletType == WalletType.EVM)
             {
-                query.Where(u => u.EVMWalletAddress.ToLower() == walletAddress.ToLower());
+                query = query.Where(u => u.EVMWalletAddress.ToLower() == walletAddress.ToLower());
             }
             else if (walletType == WalletType.TRON)
             {
-                query.Where(u => u.TronWalletAddress.ToLower() == walletAddress.ToLower());
+                query = query.Where(u => u.TronWalletAddress.ToLower() == walletAddress.ToLower());
             }
             else throw new BadRequestException("Invalid wallet type!");
 
