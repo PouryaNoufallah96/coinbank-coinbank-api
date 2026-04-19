@@ -12,7 +12,7 @@ namespace CoinBank.Services._File
     public class FileService(
        FileSettings _fileSettings,
        IRandomService _randomService)
-       : IFileService, ISingletonDependency
+       : IFileService, IScopedDependency
     {
         private readonly long _maxImageSize = 10 * 1024 * 1024;   // 5 MB
         private readonly long _maxDocSize = 50 * 1024 * 1024;    // 50 MB

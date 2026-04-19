@@ -1,6 +1,10 @@
 ﻿using Asp.Versioning;
 using CoinBank.Services._File;
+using CoinBank.Services._PreSale.DTOs.Results;
+using CoinBank.Services._Price;
+using CoinBank.Services._Price.DTOs.Results;
 using Microsoft.AspNetCore.Mvc;
+using Swashbuckle.AspNetCore.Annotations;
 using Utilities.Api;
 using Utilities.Attributes;
 using Utilities.Filters;
@@ -13,8 +17,17 @@ namespace CoinHalls.Api.Controllers.V1
     [ApiResultFilter]
     [ApiVersion("1")]
     [Route("api/v{version:apiVersion}/[controller]")]
-    public class FileController(IFileService _fileService) : ApiBaseController
+    public class FileController(IFileService _fileService,IPriceService priceService) : ApiBaseController
     {
+
+        [HttpPost("[action]")]
+        [SwaggerOperation(Summary = "test", Tags = ["test"])]
+        public async Task<List<PriceResult>> test() 
+        {
+            return await priceService.SyncAllPricesFromCoinMarketCapAsync();
+        }
+
+
         [HttpGet("[action]/{fileName}")]
         //[IgnoreSignatureAttribute]
         public async Task<IActionResult> DownloadFileAsync([FromRoute] string fileName)

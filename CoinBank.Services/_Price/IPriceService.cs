@@ -4,10 +4,13 @@ namespace CoinBank.Services._Price
 {
     public interface IPriceService
     {
-        Task<PriceResult> FetchTokenPriceAsync(string tokenName);
+        Task<PriceResult> FetchTokenPriceFromGeckoTerminalAsync(string tokenName, string poolId = null);
         Task FetchAllPricesAsync();
-        Task<Dictionary<string, PriceResult>> FetchAllPricesForInternalUsageAsync();
         Task<decimal> GetOneTokenPriceForInternalUsage(string tokenName);
         Task<EffectivePriceResult> CalculateEffectivePriceAsync(string tokenName, decimal assetQuantity, decimal USDTAmount);
+
+        Task<PriceResult> FetchTokenPriceFromCoinMarketCapAsync(string symbol);
+        Task<List<PriceResult>> FetchTokensPriceFromCoinMarketCapAsync(List<string> symbols);
+        Task<List<PriceResult>> SyncAllPricesFromCoinMarketCapAsync();
     }
 }
