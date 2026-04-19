@@ -4,7 +4,7 @@ using static Utilities.Constants.RegisterMode;
 
 namespace CoinBank.Services._Price._BackgroundServices
 {
-    public class PriceScheduler(IServiceProvider serviceProvider) : SchedulerBase(serviceProvider, TimeSpan.FromMinutes(3)), IHostedDependency
+    public class PriceScheduler(IServiceProvider serviceProvider) : SchedulerBase(serviceProvider, TimeSpan.FromSeconds(40)), IHostedDependency
     {
         protected override async Task HandleAsync(IServiceProvider scopedProvider, CancellationToken cancellationToken)
         {

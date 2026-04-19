@@ -1,7 +1,11 @@
 ﻿using CoinBank.Services._Common.DTOs.Settings;
 using CoinBank.Services._Price.DTOs.Results;
+using CoinBank.Services._Price.DTOs.Settings;
 using CoinBank.Services._Price.DTOs.Storages;
+using Microsoft.CodeAnalysis;
 using Microsoft.Extensions.Logging;
+using Nethereum.Contracts.QueryHandlers.MultiCall;
+using Nethereum.Contracts.Standards.ERC20.TokenList;
 using System.Collections.Concurrent;
 using System.Text.Json;
 using Utilities.Exceptions.Common;
@@ -10,114 +14,93 @@ using static Utilities.Constants.RegisterMode;
 namespace CoinBank.Services._Price
 {
     public class PriceService(
-        AvailableTokensSettings _availableTokenDatas,
+       AvailableTokensSettings _availableTokenDatas,
        ILogger<PriceService> _logger,
+       PriceSetting _priceSetting,
        PriceStorage _priceStorage) : IPriceService, IScopedDependency
     {
         private static readonly HttpClient _httpClient = new HttpClient();
-         
 
-
-        public async Task<PriceResult> FetchTokenPriceAsync(string tokenName)
-        {
-            try
-            {
-                
-                return await FetchTokenPriceFromGeckoTerminalAsync(tokenName);
-
-            }
-            catch (Exception ex)
-            {
-                await Task.Delay(30000);
-                return await FetchTokenPriceFromGeckoTerminalAsync(tokenName);
-            }
-        }
 
         public async Task FetchAllPricesAsync()
         {
-            foreach (var token in _availableTokenDatas)
+            try
             {
-                var priceData = await FetchTokenPriceAsync(token.Name);
-                if (priceData != null)
+                var result = await SyncAllPricesFromCoinMarketCapAsync();
+                foreach (var item in result)
                 {
-                    _priceStorage.UpdatePrice(token.Name, priceData);
+                    if (item != null)
+                    {
+                        _priceStorage.UpdatePrice(item.TokenName, item);
+                    }
                 }
-
-                await Task.Delay(12000);
             }
-        }
-    
-        public async Task<Dictionary<string, PriceResult>> FetchAllPricesForInternalUsageAsync()
-        {
-            var result = new ConcurrentDictionary<string, PriceResult>();
-
-            var tasks = _availableTokenDatas.Select(async token =>
+            catch (Exception e)
             {
-                var priceData = await FetchTokenPriceAsync(token.Name);
-                if (priceData != null)
+                _logger.LogError($"Error fetching token price from CoinMarketCap for : {e.Message}");
+
+                var result = await SyncAllPricesFromGeckoTerminalAsync();
+                foreach (var item in result)
                 {
-                    result[token.Name] = priceData;
+                    if (item != null)
+                    {
+                        _priceStorage.UpdatePrice(item.TokenName, item);
+                    }
                 }
-            });
+            }
 
-            await Task.WhenAll(tasks);
 
-            return result.ToDictionary(kv => kv.Key, kv => kv.Value);
         }
 
         public async Task<decimal> GetOneTokenPriceForInternalUsage(string tokenName)
         {
+            tokenName = tokenName.ToUpper();
+
+            if (_priceStorage.TryGetValue(tokenName, out var value)
+                && value != null
+                && value.Price != null)
+            {
+                return value.Price.Price;
+            }
 
             decimal price = 0;
 
-            if (!_priceStorage.TryGetValue(tokenName.ToUpper(), out var value) || value == null || value.Price == null)
+            try
             {
-                var data  = await FetchTokenPriceAsync(tokenName);
-                price = data.Price;
-            }
+                var data = await FetchTokenPriceFromCoinMarketCapAsync(tokenName);
 
-            price = value.Price.Price;
-            return price;
-        }
-
-        public async Task<EffectivePriceResult> CalculateEffectivePriceAsync(string tokenName, decimal assetQuantity, decimal USDTAmount)
-        {
-            // Validate input parameters
-            if (assetQuantity <= 0) throw new BadRequestException("Token quantity must be greater than zero.", nameof(assetQuantity));
-            var priceData = await FetchTokenPriceAsync(tokenName);
-
-
-            if (priceData == null)
-            {
-                if (!_priceStorage.TryGetValue(tokenName.ToUpper(), out var value) || value == null || value.Price == null)
+                if (data != null)
                 {
-                    throw new BadRequestException(nameof(priceData), "Price data cannot be null.");
+                    price = data.Price;
+                    return price;
                 }
-
-                priceData = value.Price;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"Error fetching token price from CoinMarketCap for {tokenName}: {ex.Message}");
             }
 
             try
             {
-                var price = priceData.Price;
-                var effectivePrice = USDTAmount / assetQuantity;
-                var priceImpact = (effectivePrice - priceData.Price) / priceData.Price * 100;
-                return new EffectivePriceResult
-                {
-                    EffectivePrice = effectivePrice,
-                    Price = price,
-                    Impact = priceImpact
-                };
+                var data = await FetchTokenPriceFromGeckoTerminalAsync(tokenName);
 
+                if (data != null)
+                {
+                    price = data.Price;
+                    return price;
+                }
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Unexpected error calculating effective price for {Token}", priceData.TokenName);
-                throw new BaseException("Failed to calculate effective price due to an unexpected error.");
+                _logger.LogError($"Error fetching token price from GeckoTerminal for {tokenName}: {ex.Message}");
             }
+
+            return 0;
         }
 
 
+        #region GeckoTerminal
+       
         /// <summary>
         /// this method use for fetch price data with token name
         /// </summary>
@@ -164,6 +147,293 @@ namespace CoinBank.Services._Price
             {
                 Console.WriteLine($"Error fetching token price gecko for {poolId}: {ex.Message}");
                 return null;
+            }
+        }
+
+        public async Task<List<PriceResult>> SyncAllPricesFromGeckoTerminalAsync()
+        {
+            var results = new List<PriceResult>();
+
+            try
+            {
+                var tokens = _availableTokenDatas
+                    .Where(t => !string.IsNullOrWhiteSpace(t.Name))
+                    .ToList();
+
+                var baseTokens = new List<AvailableTokenData>
+                {
+                    new AvailableTokenData
+                    {
+                        Name = "BNB",
+                        Network = "BSC",
+                        PoolId = "0x58f876857a02d6762cfc6c6e3f2c0b8c0e0f9e7c", // PancakeSwap BNB/USDT
+                        PriceDecimalPlaces = 4
+                    },
+                    new AvailableTokenData
+                    {
+                        Name = "ETH",
+                        Network = "ERC20",
+                        PoolId = "0x60594a405d53811d3bc4766596efd80fd545a270", // Uniswap ETH/USDT
+                        PriceDecimalPlaces = 4
+                    },
+                    //new AvailableTokenData
+                    //{
+                    //    Name = "TRX",
+                    //    Network = "TRC20",
+                    //    PoolId = "TRX_USDT_POOL_ID",
+                    //    PriceDecimalPlaces = 4
+                    //},
+                    new AvailableTokenData
+                    {
+                        Name = "USDT",
+                        Network = "MULTI",
+                        PoolId = "0x16b9a828c5a7a5c5e7c0c9f8b1b1f2d5c9e9e7f1", // USDT/USDC 
+                        PriceDecimalPlaces = 4
+                    }
+                };
+
+                var allTokens = tokens
+                    .Concat(baseTokens)
+                    .GroupBy(t => new { Name = t.Name.ToUpper(), t.Network })
+                    .Select(g => g.First())
+                    .ToList();
+
+                foreach (var token in allTokens)
+                {
+                    try
+                    {
+                        var priceData = await FetchTokenPriceFromGeckoTerminalAsync(token.Name, token.PoolId);
+
+                        if (priceData != null)
+                        {
+                            priceData.Price = Math.Round(priceData.Price, token.PriceDecimalPlaces);
+                            priceData.TokenNetwork = token.Network;
+                            results.Add(priceData);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError($"Error fetching Gecko price for {token.Name}: {ex.Message}");
+                    }
+
+
+                    await Task.Delay(1500);
+                }
+
+                return results;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"Error syncing all prices from Gecko: {ex.Message}");
+                return results;
+            }
+        }
+
+        #endregion
+
+
+        #region CoinMarketCap
+        public async Task<List<PriceResult>> FetchTokensPriceFromCoinMarketCapAsync(List<string> symbols)
+        {
+            if (symbols == null || !symbols.Any())
+                return new List<PriceResult>();
+
+            string symbolQuery = string.Join(",", symbols.Select(s => s.ToUpper()));
+            string url = $"https://pro-api.coinmarketcap.com/v1/cryptocurrency/quotes/latest?symbol={symbolQuery}&convert=USD";
+
+            try
+            {
+                var request = new HttpRequestMessage(HttpMethod.Get, url);
+                request.Headers.Add("X-CMC_PRO_API_KEY", _priceSetting.CMCApiKey);
+
+                var response = await _httpClient.SendAsync(request);
+                response.EnsureSuccessStatusCode();
+
+                var jsonString = await response.Content.ReadAsStringAsync();
+                using JsonDocument doc = JsonDocument.Parse(jsonString);
+
+                var data = doc.RootElement.GetProperty("data");
+
+                var results = new List<PriceResult>();
+
+                foreach (var symbol in symbols)
+                {
+                    if (!data.TryGetProperty(symbol.ToUpper(), out var tokenData))
+                        continue;
+
+                    var quote = tokenData.GetProperty("quote").GetProperty("USD");
+
+                    decimal price = quote.GetProperty("price").GetDecimal();
+                    decimal change24h = quote.GetProperty("percent_change_24h").GetDecimal();
+
+                    results.Add(new PriceResult
+                    {
+                        TokenName = symbol,
+                        TokenNetwork = null,
+                        Price = price,
+                        ChangePrice24hPercentage = change24h
+                    });
+                }
+
+                return results;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error fetching token prices from CoinMarketCap: {ex.Message}");
+                return new List<PriceResult>();
+            }
+        }
+
+        public async Task<PriceResult> FetchTokenPriceFromCoinMarketCapAsync(string symbol)
+        {
+            string url = $"https://pro-api.coinmarketcap.com/v1/cryptocurrency/quotes/latest?symbol={symbol.ToUpper()}&convert=USDT";
+
+            try
+            {
+                var request = new HttpRequestMessage(HttpMethod.Get, url);
+                request.Headers.Add("X-CMC_PRO_API_KEY", _priceSetting.CMCApiKey);
+
+                var response = await _httpClient.SendAsync(request);
+                response.EnsureSuccessStatusCode();
+
+                var jsonString = await response.Content.ReadAsStringAsync();
+                using JsonDocument doc = JsonDocument.Parse(jsonString);
+
+                var root = doc.RootElement.GetProperty("data").GetProperty(symbol.ToUpper());
+                var quote = root.GetProperty("quote").GetProperty("USDT");
+
+                decimal price = quote.GetProperty("price").GetDecimal();
+                decimal change24h = quote.GetProperty("percent_change_24h").GetDecimal();
+
+                return new PriceResult
+                {
+                    TokenName = symbol,
+                    TokenNetwork = "BSC",
+                    Price = price,
+                    ChangePrice24hPercentage = change24h
+                };
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error fetching token price from CoinMarketCap for {symbol}: {ex.Message}");
+                return null;
+            }
+        }
+
+        public async Task<List<PriceResult>> SyncAllPricesFromCoinMarketCapAsync()
+        {
+            try
+            {
+                var tokens = _availableTokenDatas
+                    .Where(t => !string.IsNullOrWhiteSpace(t.Name))
+                    .ToList();
+
+                var baseTokens = new List<AvailableTokenData>
+                {
+                    new AvailableTokenData { Name = "BNB", Network = "BSC", PriceDecimalPlaces = 4 },
+                    new AvailableTokenData { Name = "ETH", Network = "ERC20", PriceDecimalPlaces = 4 },
+                    new AvailableTokenData { Name = "TRX", Network = "TRC20", PriceDecimalPlaces = 4 },
+                    new AvailableTokenData { Name = "USDT", Network = "MULTI", PriceDecimalPlaces = 4 }
+                };
+
+                var allTokens = tokens
+                    .Concat(baseTokens)
+                    .GroupBy(t => new { Name = t.Name.ToUpper(), t.Network })
+                    .Select(g => g.First())
+                    .ToList();
+
+                if (!allTokens.Any())
+                    return new List<PriceResult>();
+
+                var symbols = allTokens
+                    .Select(t => t.Name.ToUpper())
+                    .Distinct()
+                    .ToList();
+
+                string symbolQuery = string.Join(",", symbols);
+                string url = $"https://pro-api.coinmarketcap.com/v1/cryptocurrency/quotes/latest?symbol={symbolQuery}&convert=USD";
+
+                var request = new HttpRequestMessage(HttpMethod.Get, url);
+                request.Headers.Add("X-CMC_PRO_API_KEY",  _priceSetting.CMCApiKey);
+
+                var response = await _httpClient.SendAsync(request);
+                response.EnsureSuccessStatusCode();
+
+                var jsonString = await response.Content.ReadAsStringAsync();
+                using JsonDocument doc = JsonDocument.Parse(jsonString);
+
+                var data = doc.RootElement.GetProperty("data");
+
+                var results = new List<PriceResult>();
+
+                foreach (var token in allTokens)
+                {
+                    var symbol = token.Name.ToUpper();
+
+                    if (!data.TryGetProperty(symbol, out var tokenData))
+                        continue;
+
+                    var quote = tokenData.GetProperty("quote").GetProperty("USD");
+
+                    decimal price = quote.GetProperty("price").GetDecimal();
+                    decimal change24h = quote.GetProperty("percent_change_24h").GetDecimal();
+
+                    results.Add(new PriceResult
+                    {
+                        TokenName = symbol,
+                        TokenNetwork = token.Network,
+                        Price = Math.Round(price, token.PriceDecimalPlaces),
+                        ChangePrice24hPercentage = change24h
+                    });
+                }
+
+                return results;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error syncing all prices");
+                return new List<PriceResult>();
+            }
+        }
+
+        #endregion
+
+
+
+        public async Task<EffectivePriceResult> CalculateEffectivePriceAsync(string tokenName, decimal assetQuantity, decimal USDTAmount)
+        {
+            // Validate input parameters
+            if (assetQuantity <= 0) throw new BadRequestException("Token quantity must be greater than zero.", nameof(assetQuantity));
+            var priceData = await FetchTokenPriceFromGeckoTerminalAsync(tokenName);
+
+
+            if (priceData == null)
+            {
+                if (!_priceStorage.TryGetValue(tokenName.ToUpper(), out var value) || value == null || value.Price == null)
+                {
+                    throw new BadRequestException(nameof(priceData), "Price data cannot be null.");
+                }
+
+                priceData = value.Price;
+            }
+
+            try
+            {
+                var price = priceData.Price;
+                var effectivePrice = USDTAmount / assetQuantity;
+                var priceImpact = (effectivePrice - priceData.Price) / priceData.Price * 100;
+                return new EffectivePriceResult
+                {
+                    EffectivePrice = effectivePrice,
+                    Price = price,
+                    Impact = priceImpact
+                };
+
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Unexpected error calculating effective price for {Token}", priceData.TokenName);
+                throw new BaseException("Failed to calculate effective price due to an unexpected error.");
             }
         }
 
