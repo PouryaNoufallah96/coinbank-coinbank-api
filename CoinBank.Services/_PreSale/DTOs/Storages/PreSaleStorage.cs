@@ -48,6 +48,32 @@ namespace CoinBank.Services._PreSale.DTOs.Storages
             _hubContext.Clients.All.SendAsync("NotifyPreSale", this);
         }
 
+        public void UpdateContractBalance(string symbol, decimal newBalance)
+        {
+            if (string.IsNullOrEmpty(symbol))
+                return;
+
+            var item = this.Values.FirstOrDefault(x => x.Symbol == symbol);
+            if (item == null)
+                return;
+
+            item.ContractBalance = newBalance;
+            item.LastUpdated = DateTime.UtcNow;
+
+            this.AddOrUpdate(
+                item.PreSaleReference,
+                item,
+                (key, existing) =>
+                {
+                    existing.ContractBalance = newBalance;
+                    existing.LastUpdated = DateTime.UtcNow;
+                    return existing;
+                });
+
+            _hubContext.Clients.All.SendAsync("NotifyPreSale", this);
+        }
+
+
 
     }
 
@@ -61,7 +87,7 @@ namespace CoinBank.Services._PreSale.DTOs.Storages
         public string Symbol { get; set; }
         public string LogoUrl { get; set; }
         public string Description { get; set; }
-
+        public decimal ContractBalance { get; set; } 
         public decimal TotalSupply { get; set; } 
         public decimal MaxPerOrder { get; set; } 
         public decimal MinPerOrder { get; set; }

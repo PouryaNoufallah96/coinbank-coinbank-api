@@ -21,5 +21,7 @@ namespace CoinBank.Services._PreSale
         Task SyncExpirePreSaleTokenAsync();
         Task SyncPreSaleToStorageAsync(string preSaleReference);
         Task<PreSale> GetPreSaleDataByReferenceForInternalUsageAsync(string preSaleReference);
+
+        Task SyncPreSaleTokenBalanceAsync(string tokenName); 
     }
 }

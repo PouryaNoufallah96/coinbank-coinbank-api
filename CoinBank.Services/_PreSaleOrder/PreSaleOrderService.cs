@@ -5,6 +5,7 @@ using CoinBank.Services._BlockChain.DTOs.Settings;
 using CoinBank.Services._Common.DTOs.Settings;
 using CoinBank.Services._Common.Services;
 using CoinBank.Services._PreSale;
+using CoinBank.Services._PreSale.DTOs.Storages;
 using CoinBank.Services._PreSaleOrder.DTOs.Results;
 using CoinBank.Services._PreSaleOrder.DTOs.Updates;
 using CoinBank.Services._PreSaleRelease;
@@ -28,6 +29,7 @@ namespace CoinBank.Services._PreSaleOrder
         IPreSaleOrderRepository _preSaleOrderRepository,
         BlockChainSettings _blockChainSettings,
         ILogger<PreSaleOrderService> _logger,
+        PreSaleStorage _preSaleStorage,
         IBlockChainService _blockChainService) : IPreSaleOrderService, IScopedDependency
     {
 
@@ -43,14 +45,13 @@ namespace CoinBank.Services._PreSaleOrder
             var presale = await _preSaleService
                 .GetPreSaleDataByReferenceForInternalUsageAsync(update.PreSaleReference);
 
-
             var userOrders = await GetUserActiveOrders(presale.PreSaleReference, publicKey);
 
             ValidateUserOrderCount(userOrders);
 
             var userTotalAmount = userOrders.Sum(x => x.ReceivingTokenAmount);
             await ValidateOrderAmount(presale, update.TokenAmount, userTotalAmount);
-            await ValidateUserBalance(evmWalletAddress, presale.Price, update.TokenAmount);
+            await ValidateUserAndContractBalance(evmWalletAddress, presale.Price, update.TokenAmount,presale.Symbol);
 
             var tokenData = ValidateToken(presale.Symbol);
 
@@ -322,6 +323,7 @@ namespace CoinBank.Services._PreSaleOrder
             }
         }
 
+
         /// <summary>
         /// search for release for call to claim
         /// </summary>
@@ -556,7 +558,7 @@ namespace CoinBank.Services._PreSaleOrder
         /// <param name="amount"></param>
         /// <returns></returns>
         /// <exception cref="BadRequestException"></exception>
-        private async Task ValidateUserBalance(string wallet, decimal price, decimal amount)
+        private async Task ValidateUserAndContractBalance(string wallet, decimal price, decimal amount,string symbol)
         {
             var balance = await _blockChainService
                 .GetWalletAddressSingleTokenBalanceAsync(wallet, "RZUSD");
@@ -565,6 +567,24 @@ namespace CoinBank.Services._PreSaleOrder
 
             if (balance < required)
                 throw new BadRequestException("Insufficient RZUSD balance!");
+
+            var preSale = _preSaleStorage.Values
+                 .FirstOrDefault(x => x.Symbol == symbol);
+
+            if (preSale == null)
+                throw new BadRequestException("PreSale not found!");
+
+            decimal contractBalance = preSale.ContractBalance;
+
+            if (contractBalance < amount)
+            {
+                contractBalance = await _blockChainService.GetContractSingleBalanceAsync(symbol);
+
+                _preSaleStorage.UpdateContractBalance(symbol, contractBalance);
+
+                if (contractBalance < amount)
+                    throw new BadRequestException("Insufficient contract token balance!");
+            }
         }
 
 
