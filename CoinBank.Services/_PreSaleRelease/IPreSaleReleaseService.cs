@@ -1,9 +1,9 @@
-﻿using CoinBank.Services._PreSaleRelease.DTOs.Results;
+﻿//using CoinBank.Services._PreSaleRelease.DTOs.Results;
 
-namespace CoinBank.Services._PreSaleRelease
-{
-    public interface IPreSaleReleaseService
-    {
-        Task<List<ReleasesOfPreSaleOrderResult>> GetReleasesOfPreSaleOrderByReferenceAsync(string preSaleOrderReference);
-    }
-}
+//namespace CoinBank.Services._PreSaleRelease
+//{
+//    public interface IPreSaleReleaseService
+//    {
+//        Task<List<ReleasesOfPreSaleOrderResult>> GetReleasesOfPreSaleOrderByReferenceAsync(string preSaleOrderReference);
+//    }
+//}

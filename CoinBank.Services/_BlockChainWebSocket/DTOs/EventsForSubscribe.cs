@@ -4,54 +4,62 @@ using System.Numerics;
 namespace CoinBank.Services._BlockChainWebSocket.DTOs
 {
 
-    [Event("InsuranceRegistered")]
-    public class InsuranceRegisteredEventDTO : IEventDTO
+    [Event("Claimed")]
+    public class ClaimedEventDTO : IEventDTO
     {
-        [Parameter("bytes32", "insuranceId", 1, false)]
-        public byte[] InsuranceId { get; set; }
+        [Parameter("bytes32", "saleId", 1, false)]
+        public byte[] SaleId { get; set; }
 
-        [Parameter("address", "user", 2, false)]
-        public string User { get; set; }
+        [Parameter("bytes32", "orderId", 2, false)]
+        public byte[] OrderId { get; set; }
 
-        [Parameter("address", "insuredToken", 3, false)]
-        public string InsuredToken { get; set; }
+        [Parameter("address", "buyer", 3, false)]
+        public string Buyer { get; set; }
 
-        [Parameter("uint256", "coverageAmount", 4, false)]
-        public BigInteger CoverageAmount { get; set; }
+        [Parameter("uint256", "amountClaimed", 4, false)]
+        public BigInteger AmountClaimed { get; set; }
     }
 
-    [Event("InsuranceFinalized")]
-    public class InsuranceFinalizedEventDTO : IEventDTO
+    [Event("PresaleConfigured")]
+    public class PresaleConfiguredEventDTO : IEventDTO
     {
-        [Parameter("bytes32", "insuranceId", 1, false)]
-        public byte[] InsuranceId { get; set; }
+        [Parameter("bytes32", "saleId", 1, false)]
+        public byte[] SaleId { get; set; }
 
-        [Parameter("address", "user", 2, false)]
-        public string User { get; set; }
+        [Parameter("address", "token", 2, false)]
+        public string Token { get; set; }
 
-        [Parameter("uint256", "settlementAmount", 3, false)]
-        public BigInteger SettlementAmount { get; set; }
+        [Parameter("uint256", "totalAllocation", 3, false)]
+        public BigInteger TotalAllocation { get; set; }
 
-        [Parameter("uint256", "finalPrice", 4, false)]
-        public BigInteger FinalPrice { get; set; }
+        [Parameter("uint256", "maxPerWallet", 4, false)]
+        public BigInteger MaxPerWallet { get; set; }
 
-        [Parameter("address", "payoutToken", 5, false)]
-        public string PayoutToken { get; set; }
+        [Parameter("uint64", "start", 5, false)]
+        public ulong Start { get; set; }
 
-        [Parameter("uint256", "payoutAmount", 6, false)]
-        public BigInteger PayoutAmount { get; set; }
+        [Parameter("uint64", "end", 6, false)]
+        public ulong End { get; set; }
     }
 
-    [Event("InsuranceCancelled")]
-    public class InsuranceCancelledEventDTO : IEventDTO
+    [Event("Purchased")]
+    public class PurchasedEventDTO : IEventDTO
     {
-        [Parameter("bytes32", "insuranceId", 1, false)]
-        public byte[] InsuranceId { get; set; }
+        [Parameter("bytes32", "saleId", 1, false)]
+        public byte[] SaleId { get; set; }
 
-        [Parameter("address", "user", 2, false)]
-        public string User { get; set; }
+        [Parameter("bytes32", "orderId", 2, false)]
+        public byte[] OrderId { get; set; }
+
+        [Parameter("address", "buyer", 3, false)]
+        public string Buyer { get; set; }
+
+        [Parameter("uint256", "amountPurchased", 4, false)]
+        public BigInteger AmountPurchased { get; set; }
+
+        [Parameter("uint256", "amountPaid", 5, false)]
+        public BigInteger AmountPaid { get; set; }
     }
-
 
     [Event("Transfer")]
     public class TransferEventDTO : IEventDTO

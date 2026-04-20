@@ -22,7 +22,6 @@ namespace CoinBank.Services._PreSaleOrder.DTOs.Results
         public List<PreSaleOrderReleaseStep> ReleaseSchedule { get; set; }
         public string Signature { get; set; }
         public DateTime SignatureExpire { get; set; }
-        public List<ReleasesOfPreSaleOrderResult> ReleaseTransactions { get; set; }
         public decimal TotalReleasedTokenAmount { get; set; } 
         public decimal RemainReleaseTokenAmount { get; set; }
     }
