@@ -10,9 +10,9 @@
         ""name"": ""claimTokensByOperator"",
         ""inputs"": [
             {
-                ""name"": ""buyer"",
-                ""type"": ""address"",
-                ""internalType"": ""address""
+                ""name"": ""presaleId"",
+                ""type"": ""bytes32"",
+                ""internalType"": ""bytes32""
             },
             {
                 ""name"": ""presaleId"",

@@ -11,7 +11,6 @@ namespace CoinBank.Domain.Collections
         public string TransactionLogId { get; set; } = Guid.NewGuid().ToString("N");
         public string Reference { get; set; } 
         public string Wallet { get; set; }
-        //public decimal Amount { get; set; }
         public string Hash { get; set; }
         public string TokenAddress { get; set; }
         public decimal BlockNumber { get; set; }
@@ -30,7 +29,7 @@ namespace CoinBank.Domain.Collections
     public enum BlockchainEventType
     {
         PreSaleOrderCreate,
-        PreSaleRelease, 
+        PreSaleReleaseClaimed, 
         TransactionConfirmed, 
         TransactionFailed,
         BlockMined,

@@ -41,7 +41,12 @@ namespace CoinBank.Domain.Collections
         public decimal Percentage { get; set; }
         public DateTime? RegisterMoment { get; set; } = null;
         public string RegisterHash { get; set; } = null;
-    }
+
+        public string TxHash { get; set; } = null;
+        public DateTime? TransactionMoment { get; set; } = null;
+        public decimal? CliamedAmount { get; set; } = null;
+
+    } 
 
 
 

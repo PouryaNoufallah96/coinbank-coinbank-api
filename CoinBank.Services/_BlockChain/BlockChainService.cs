@@ -55,21 +55,21 @@ namespace CoinBank.Services._BlockChain
         #region PreSale Methods
 
 
-        public async Task<string> ClaimTokensByOperatorAsync(string buyer, string presaleId)
+        public async Task<string> ClaimTokensByOperatorAsync(string presaleId, string orderId)
         {
-            if (string.IsNullOrEmpty(buyer))
-                throw new BadRequestException("Buyer address is required.");
-
             if (string.IsNullOrEmpty(presaleId))
                 throw new BadRequestException("PresaleId is required.");
+
+            if (string.IsNullOrEmpty(orderId))
+                throw new BadRequestException("OrderId is required.");
 
             try
             {
                 var contract = _web3.Eth.GetContract(ContractAbi, _settings.ContractAddress);
                 var function = contract.GetFunction("claimTokensByOperator");
 
-                // تبدیل presaleId به bytes32
                 var presaleIdBytes = HexToByteArray32(presaleId);
+                var orderIdBytes = HexToByteArray32(orderId);
 
                 var gasPrice = await GetOptimalGasPriceAsync();
                 var gas = new Nethereum.Hex.HexTypes.HexBigInteger(
@@ -82,8 +82,8 @@ namespace CoinBank.Services._BlockChain
                     value: new Nethereum.Hex.HexTypes.HexBigInteger(0),
                     functionInput: new object[]
                     {
-                        buyer,
-                        presaleIdBytes
+                presaleIdBytes,
+                orderIdBytes
                     }
                 );
 
@@ -117,6 +117,7 @@ namespace CoinBank.Services._BlockChain
                 return null;
             }
         }
+
 
         public async Task<string> ConfigurePresaleAsync(PreSale preSale)
         {

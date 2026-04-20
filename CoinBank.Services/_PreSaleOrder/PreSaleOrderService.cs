@@ -25,7 +25,6 @@ namespace CoinBank.Services._PreSaleOrder
     public class PreSaleOrderService(
         IPreSaleService _preSaleService,
         AvailableTokensSettings _availableTokenData,
-        IPreSaleReleaseService _preSaleReleaseService,
         IPreSaleOrderRepository _preSaleOrderRepository,
         BlockChainSettings _blockChainSettings,
         ILogger<PreSaleOrderService> _logger,
@@ -96,21 +95,13 @@ namespace CoinBank.Services._PreSaleOrder
             return ConvertToResult(newOrder);
         }
 
-
-        //public static byte[] HexToBytes32(string hex)
-        //{
-        //    if (string.IsNullOrEmpty(hex))
-        //        throw new ArgumentException("Hex is null");
-
-        //    var bytes = Nethereum.Hex.HexConvertors.Extensions.HexByteConvertorExtensions
-        //        .HexToByteArray(hex);
-
-        //    if (bytes.Length != 32)
-        //        throw new ArgumentException("Invalid bytes32 length");
-
-        //    return bytes;
-        //}
-
+       
+        /// <summary>
+        /// use for convert hex to byte32
+        /// </summary>
+        /// <param name="hex"></param>
+        /// <returns></returns>
+        /// <exception cref="ArgumentException"></exception>
         public static byte[] HexToByteArray32(string hex)
         {
             if (string.IsNullOrEmpty(hex))
@@ -251,7 +242,6 @@ namespace CoinBank.Services._PreSaleOrder
         }
 
 
-
         /// <summary>
         /// use for get one pre sale order detail with transactions(releases)
         /// </summary>
@@ -276,11 +266,10 @@ namespace CoinBank.Services._PreSaleOrder
 
             var order = await query.FirstOrDefaultAsync() ?? throw new NotFoundException("PreSale order not found!");
 
-            var releases = await _preSaleReleaseService
-                .GetReleasesOfPreSaleOrderByReferenceAsync(order.PreSaleOrderReference);
 
-            decimal totalReleased = releases
-                .Sum(x => x.ReleaseAmount);
+
+            decimal totalReleased = order.ReleaseSchedule.Where(q => q.TxHash != null)
+                .Sum(x => x.CliamedAmount ?? 0);
 
             decimal remainForRelease = order.ReceivingTokenAmount - totalReleased;
 
@@ -305,13 +294,38 @@ namespace CoinBank.Services._PreSaleOrder
                 ModifiedMoment = order.ModifiedMoment,
                 CreatedMoment = order.CreatedMoment,
 
-                ReleaseTransactions = releases,
                 RemainReleaseTokenAmount = remainForRelease,
                 TotalReleasedTokenAmount = totalReleased,
             };
         }
 
 
+        /// <summary>
+        /// use for active a order from events
+        /// </summary>
+        /// <param name="preSaleOrderReference"></param>
+        /// <param name="registerHash"></param>
+        /// <returns></returns>
+        public async Task ActivatePreSaleOrderForInternalUsageAsync(string preSaleOrderReference, string registerHash)
+        {
+            var order = await _preSaleOrderRepository.AsQueryable()
+                .FirstOrDefaultAsync(q => q.PreSaleOrderReference.ToLower() == preSaleOrderReference.ToLower() && q.State == PreSaleOrderState.NotRegistered);
+
+            if (order != null)
+            {
+                order.RegisterHash = registerHash;
+                order.RegisterMoment = DateTime.UtcNow;
+                order.State = PreSaleOrderState.InProgress;
+
+                await _preSaleOrderRepository.ReplaceOneAsync(order);
+
+            }
+        }
+
+        /// <summary>
+        /// search for release for call to claim
+        /// </summary>
+        /// <returns></returns>
         public async Task ProcessReleaseOrderAsync()
         {
             try
@@ -335,80 +349,57 @@ namespace CoinBank.Services._PreSaleOrder
             }
         }
 
-        private async Task<string> ProcessNextReleaseAsync(PreSaleOrder order)
+      
+        /// <summary>
+        /// get one for internal usage
+        /// do not check the null
+        /// </summary>
+        /// <param name="preSaleOrderRef"></param>
+        /// <returns></returns>
+        public async Task<PreSaleOrder> GetOneByReferenceForInternalUsageAsync(string preSaleOrderRef)
         {
-            try
-            {
-                var now = DateTime.UtcNow;
-
-                var step = order.ReleaseSchedule
-                    .Where(x => x.ReleaseDate <= now && x.RegisterMoment == null)
-                    .OrderBy(x => x.ReleaseDate)
-                    .FirstOrDefault();
-
-                if (step == null)
-                {
-                    _logger.LogWarning("Order found but no valid step to process");
-                    return null;
-                }
-
-                var txHash = await _blockChainService.ClaimTokensByOperatorAsync(
-                    order.WalletAddress,
-                    order.PreSaleReference
-                );
-
-                if (string.IsNullOrWhiteSpace(txHash))
-                {
-                    _logger.LogWarning("Blockchain returned empty txHash");
-                    return null;
-                }
-
-                step.RegisterHash = txHash;
-                step.RegisterMoment = now;
-
-                if (order.ReleaseSchedule.All(x => x.RegisterMoment != null))
-                {
-                    order.State = PreSaleOrderState.Completed;
-                }
-
-                await _preSaleOrderRepository.ReplaceOneAsync(order);
-
-                _logger.LogInformation(
-                    "Step processed. OrderId: {OrderId}, TxHash: {TxHash}",
-                    order.PreSaleOrderReference,
-                    txHash
-                );
-
-                return txHash;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error processing release");
-                throw;
-            }
+            return await _preSaleOrderRepository.AsQueryable().FirstOrDefaultAsync(q => q.PreSaleOrderReference == preSaleOrderRef);
         }
 
 
-        ///// <summary>
-        ///// this method is for preSale service 
-        ///// </summary>
-        ///// <param name="preSaleReference"></param>
-        ///// <returns></returns>
-        //public async Task MakeCompeletePreSaleOrderStateByPreSaleReferenceAsync(string preSaleReference)
-        //{
-        //    var now = DateTime.UtcNow;
-        //    var builder = Builders<PreSaleOrder>.Filter;
+        /// <summary>
+        /// use for update a step that was registered
+        /// </summary>
+        /// <param name="preSaleOrderRef"></param>
+        /// <param name="txHash"></param>
+        /// <param name="claimedAmount"></param>
+        /// <returns></returns>
+        public async Task UpdatePreSaleReleaseStepForAddTransactionAsync(string preSaleOrderRef, string txHash, string claimedAmount)
+        {
+            var order = await _preSaleOrderRepository
+                .AsQueryable()
+                .FirstOrDefaultAsync(q => q.PreSaleOrderReference == preSaleOrderRef);
 
-        //    var filter = builder.And(
-        //        builder.Eq(x => x.PreSaleReference, preSaleReference),
-        //        builder.Eq(x => x.State, PreSaleOrderState.InProgress)
-        //    );
+            if (order == null)
+                return;
 
-        //    var update = Builders<PreSaleOrder>.Update
-        //        .Set(x => x.State, PreSaleOrderState.Completed);
+            if (order.ReleaseSchedule == null || !order.ReleaseSchedule.Any())
+                return;
 
-        //    await _preSaleOrderRepository.UpdateManyAsync(filter, update);
-        //}
+            var step = order.ReleaseSchedule
+                .Where(x => x.RegisterMoment != null)
+                .OrderByDescending(x => x.ReleaseDate)
+                .FirstOrDefault();
+
+            if (step == null)
+                return;
+
+
+            var bigAmount = BigInteger.Parse(claimedAmount);
+            var token = ValidateToken(order.Symbol);
+            var convertedAmount = _blockChainService.ConvertFromWei(bigAmount, token.PriceDecimalPlaces);
+
+            step.TxHash = txHash;
+            step.CliamedAmount = convertedAmount;
+            step.TransactionMoment = DateTime.UtcNow;
+
+            await _preSaleOrderRepository.ReplaceOneAsync(order);
+        }
 
 
         /// <summary>
@@ -436,6 +427,8 @@ namespace CoinBank.Services._PreSaleOrder
             await _preSaleOrderRepository.DeleteManyAsync(x => ids.Contains(x.Id));
         }
 
+
+        #region Privates
 
         /// <summary>
         /// use for generate signature
@@ -554,6 +547,15 @@ namespace CoinBank.Services._PreSaleOrder
             };
         }
 
+
+        /// <summary>
+        /// use for validate user balance
+        /// </summary>
+        /// <param name="wallet"></param>
+        /// <param name="price"></param>
+        /// <param name="amount"></param>
+        /// <returns></returns>
+        /// <exception cref="BadRequestException"></exception>
         private async Task ValidateUserBalance(string wallet, decimal price, decimal amount)
         {
             var balance = await _blockChainService
@@ -565,6 +567,13 @@ namespace CoinBank.Services._PreSaleOrder
                 throw new BadRequestException("Insufficient RZUSD balance!");
         }
 
+
+        /// <summary>
+        /// use for get user active orders
+        /// </summary>
+        /// <param name="preSaleReference"></param>
+        /// <param name="publicKey"></param>
+        /// <returns></returns>
         private async Task<List<PreSaleOrder>> GetUserActiveOrders(string preSaleReference, string publicKey)
         {
             return await _preSaleOrderRepository.AsQueryable()
@@ -574,12 +583,24 @@ namespace CoinBank.Services._PreSaleOrder
                 .ToListAsync() ?? [];
         }
 
+
+        /// <summary>
+        /// use for validate user order count for each pre-sale ref
+        /// </summary>
+        /// <param name="orders"></param>
+        /// <exception cref="BadRequestException"></exception>
         private void ValidateUserOrderCount(List<PreSaleOrder> orders)
         {
             if (orders.Count >= 5)
                 throw new BadRequestException("maximum order for each token is 5");
         }
 
+
+        /// <summary>
+        /// use for get total sold amount in all orders
+        /// </summary>
+        /// <param name="preSaleReference"></param>
+        /// <returns></returns>
         private async Task<decimal> GetTotalSoldAmount(string preSaleReference)
         {
             return await _preSaleOrderRepository.AsQueryable()
@@ -587,7 +608,16 @@ namespace CoinBank.Services._PreSaleOrder
                        (x.State == PreSaleOrderState.InProgress || x.State == PreSaleOrderState.Completed))
                 .SumAsync(x => (decimal?)x.ReceivingTokenAmount) ?? 0;
         }
-
+       
+        
+        /// <summary>
+        /// use for check amount and quantity
+        /// </summary>
+        /// <param name="preSale"></param>
+        /// <param name="requestAmount"></param>
+        /// <param name="userTotalAmount"></param>
+        /// <returns></returns>
+        /// <exception cref="BadRequestException"></exception>
         private async Task ValidateOrderAmount(PreSale preSale, decimal requestAmount, decimal userTotalAmount)
         {
             // min/max per order
@@ -615,6 +645,13 @@ namespace CoinBank.Services._PreSaleOrder
                 throw new BadRequestException($"Remaining total supply is {remainingSupply} {preSale.Symbol}");
         }
 
+
+        /// <summary>
+        /// use for validate token existing and return token data
+        /// </summary>
+        /// <param name="tokenName"></param>
+        /// <returns></returns>
+        /// <exception cref="BadRequestException"></exception>
         private AvailableTokenData ValidateToken(string tokenName)
         {
 
@@ -626,6 +663,12 @@ namespace CoinBank.Services._PreSaleOrder
             return tokenData;
         }
 
+
+        /// <summary>
+        /// convertor
+        /// </summary>
+        /// <param name="schedule"></param>
+        /// <returns></returns>
         private List<PreSaleOrderReleaseStep> MapReleaseSchedule(List<PreSaleReleaseStep> schedule)
         {
             if (schedule == null || !schedule.Any())
@@ -643,5 +686,106 @@ namespace CoinBank.Services._PreSaleOrder
                 .ToList();
         }
 
+
+        /// <summary>
+        /// notify blockchain for claim a release of order
+        /// </summary>
+        /// <param name="order"></param>
+        /// <returns></returns>
+        private async Task<string> ProcessNextReleaseAsync(PreSaleOrder order)
+        {
+            try
+            {
+                var now = DateTime.UtcNow;
+
+                var step = order.ReleaseSchedule
+                    .Where(x => x.ReleaseDate <= now && x.RegisterMoment == null)
+                    .OrderBy(x => x.ReleaseDate)
+                    .FirstOrDefault();
+
+                if (step == null)
+                {
+                    _logger.LogWarning("Order found but no valid step to process");
+                    return null;
+                }
+
+                var txHash = await _blockChainService.ClaimTokensByOperatorAsync(
+                    order.PreSaleReference,
+                    order.PreSaleOrderReference
+                );
+
+                if (string.IsNullOrWhiteSpace(txHash))
+                {
+                    _logger.LogError("Blockchain returned empty txHash");
+                    return null;
+                }
+
+                step.RegisterHash = txHash;
+                step.RegisterMoment = now;
+
+                if (order.ReleaseSchedule.All(x => x.RegisterMoment != null))
+                {
+                    order.State = PreSaleOrderState.Completed;
+                }
+
+                await _preSaleOrderRepository.ReplaceOneAsync(order);
+
+                _logger.LogInformation(
+                    "Step processed. OrderId: {OrderId}, TxHash: {TxHash}",
+                    order.PreSaleOrderReference,
+                    txHash
+                );
+
+                return txHash;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error processing release");
+                throw;
+            }
+        }
+
+
+        #endregion
+
     }
 }
+
+
+
+
+
+
+///// <summary>
+///// this method is for preSale service 
+///// </summary>
+///// <param name="preSaleReference"></param>
+///// <returns></returns>
+//public async Task MakeCompeletePreSaleOrderStateByPreSaleReferenceAsync(string preSaleReference)
+//{
+//    var now = DateTime.UtcNow;
+//    var builder = Builders<PreSaleOrder>.Filter;
+
+//    var filter = builder.And(
+//        builder.Eq(x => x.PreSaleReference, preSaleReference),
+//        builder.Eq(x => x.State, PreSaleOrderState.InProgress)
+//    );
+
+//    var update = Builders<PreSaleOrder>.Update
+//        .Set(x => x.State, PreSaleOrderState.Completed);
+
+//    await _preSaleOrderRepository.UpdateManyAsync(filter, update);
+//}
+
+//public static byte[] HexToBytes32(string hex)
+//{
+//    if (string.IsNullOrEmpty(hex))
+//        throw new ArgumentException("Hex is null");
+
+//    var bytes = Nethereum.Hex.HexConvertors.Extensions.HexByteConvertorExtensions
+//        .HexToByteArray(hex);
+
+//    if (bytes.Length != 32)
+//        throw new ArgumentException("Invalid bytes32 length");
+
+//    return bytes;

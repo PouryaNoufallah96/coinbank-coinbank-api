@@ -1,7 +1,9 @@
-﻿using CoinBank.Services._BlockChain.DTOs.Settings;
-using CoinBank.Services._Price.DTOs.Settings;
-using CoinBank.Services._TransactionLog;
+﻿using CoinBank.Domain.Collections;
+using CoinBank.Services._BlockChain.DTOs.Settings;
 using CoinBank.Services._BlockChainWebSocket.DTOs;
+using CoinBank.Services._Common.DTOs.Settings;
+using CoinBank.Services._Transaction;
+using CoinBank.Services._Transaction.DTOs.Updates;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -16,7 +18,6 @@ using Nethereum.Web3;
 using System.Numerics;
 using System.Reactive.Linq;
 using static Utilities.Constants.RegisterMode;
-using CoinBank.Services._Common.DTOs.Settings;
 
 namespace CoinBank.Services._BlockChainWebSocket
 {
@@ -24,6 +25,7 @@ namespace CoinBank.Services._BlockChainWebSocket
     {
         private readonly IServiceScopeFactory _scopeFactory;
         private readonly BlockChainSettings blockChainSettings;
+        private readonly ITransactionLogService _transactionLogService;
         private readonly ILogger<BlockChainEventBackgroundService> _logger;
         private readonly BlockchainWebSocketSetting _settings;
         private BigInteger _lastProcessedBlock = 0;
@@ -44,13 +46,13 @@ namespace CoinBank.Services._BlockChainWebSocket
 
 
         public BlockChainEventBackgroundService(
-            IServiceScopeFactory scopeFactory,
             BlockChainSettings blockChainSettings,
+            ITransactionLogService transactionLogService,
             ILogger<BlockChainEventBackgroundService> logger,
             BlockchainWebSocketSetting settings)
         {
-            _scopeFactory = scopeFactory;
             this.blockChainSettings = blockChainSettings;
+            _transactionLogService = transactionLogService;
             _logger = logger;
             _settings = settings;
             _web3 = new Web3(settings.WsUrl2);
@@ -325,7 +327,7 @@ namespace CoinBank.Services._BlockChainWebSocket
                 }
                 catch (Exception e)
                 {
-                    _logger.LogError( e.Message);
+                    _logger.LogError(e.Message);
                     throw;
                 }
 
@@ -342,36 +344,17 @@ namespace CoinBank.Services._BlockChainWebSocket
         {
             try
             {
-                using var scope = _scopeFactory.CreateScope();
-                var _transactionLogService = scope.ServiceProvider.GetRequiredService<ITransactionLogService>();
-
-                // InsuranceRegistered
-                var registered = log.DecodeEvent<InsuranceRegisteredEventDTO>();
-                if (registered != null)
+                var preSaleOrderRegisteredEvent = log.DecodeEvent<PurchasedEventDTO>();
+                if (preSaleOrderRegisteredEvent != null)
                 {
-                    await CreateRegisteredLog(log, registered, _transactionLogService, cancellationToken);
+                    await CreatePreSaleOrderCreateLogAsync(log, preSaleOrderRegisteredEvent);
                     return;
                 }
 
-                // InsuranceFinalized
-                var finalized = log.DecodeEvent<InsuranceFinalizedEventDTO>();
-                if (finalized != null)
+                var preSaleReleaseClaimedEvent = log.DecodeEvent<ClaimedEventDTO>();
+                if (preSaleReleaseClaimedEvent != null)
                 {
-                    await CreateFinalizedLog(log, finalized, _transactionLogService, cancellationToken);
-                    return;
-                }
-
-                // InsuranceCancelled
-                var cancelled = log.DecodeEvent<InsuranceCancelledEventDTO>();
-                if (cancelled != null)
-                {
-                    _logger.LogInformation(
-                        "InsuranceCancelled: {InsuranceId}, User: {User}",
-                        cancelled.Event.InsuranceId,
-                        cancelled.Event.User
-                    );
-
-                    await CreateCancelledLog(log, cancelled, _transactionLogService, cancellationToken);
+                    await CreatePreSaleOrderReleaseClaimedLogAsync(log, preSaleReleaseClaimedEvent);
                     return;
                 }
 
@@ -382,33 +365,36 @@ namespace CoinBank.Services._BlockChainWebSocket
             }
         }
 
-        private async Task CreateRegisteredLog(FilterLog log, EventLog<InsuranceRegisteredEventDTO> registered,
-            ITransactionLogService _transactionLogService, CancellationToken cancellationToken)
+        private async Task CreatePreSaleOrderReleaseClaimedLogAsync( FilterLog log, EventLog<ClaimedEventDTO> claimedEvent )
         {
-            var shieldRef = ByteArray32ToHex(registered.Event.InsuranceId);
+            var saleId = ByteArray32ToHex(claimedEvent.Event.SaleId);
+            var orderId = ByteArray32ToHex(claimedEvent.Event.OrderId);
+
             _logger.LogInformation(
-                "****************************** InsuranceRegistered: {InsuranceId}, User: {User}, Token: {Token}, Coverage: {Coverage}",
-                shieldRef,
-                registered.Event.User,
-                registered.Event.InsuredToken,
-                registered.Event.CoverageAmount
+                "****************************** Claimed: SaleId: {SaleId}, OrderId: {OrderId}, Buyer: {Buyer}, Amount: {Amount}",
+                saleId,
+                orderId,
+                claimedEvent.Event.Buyer,
+                claimedEvent.Event.AmountClaimed
             );
 
             SentrySdk.CaptureMessage(
-                $"****************************** InsuranceRegistered: {shieldRef}, User: {registered.Event.User}, Token: {registered.Event.InsuredToken}, Coverage: {registered.Event.CoverageAmount}"
+                $"****************************** Claimed: SaleId: {saleId}, OrderId: {orderId}, Buyer: {claimedEvent.Event.Buyer}, Amount: {claimedEvent.Event.AmountClaimed}"
             );
 
-            await _transactionLogService.CreateInsuranceRegisteredLogAsync(new _TransactionLog.DTOs.Updates.InsuranceRegisteredLog
+            await _transactionLogService.CreatePreSaleReleaseClaimedLogAsync(new PreSaleReleaseClaimedLog
             {
                 Hash = log.TransactionHash,
                 Address = log.Address,
                 BlockNumber = log.BlockNumber.Value,
-                UserWallet = registered.Event.User,
-                CoverageAmount = registered.Event.CoverageAmount.ToString(),
-                EventType = Domain.Entities.BlockchainEventType.InsuranceRegistered,
-                InsuredTokenAddress = registered.Event.InsuredToken,
-                ShieldReference = shieldRef,
-            }, cancellationToken);
+
+                Buyer = claimedEvent.Event.Buyer,
+                SaleId = saleId,
+                OrderId = orderId,
+                AmountClaimed = claimedEvent.Event.AmountClaimed.ToString(),
+
+                EventType = BlockchainEventType.PreSaleReleaseClaimed
+            });
 
             lock (_blockLock)
             {
@@ -416,67 +402,38 @@ namespace CoinBank.Services._BlockChainWebSocket
             }
         }
 
-        private async Task CreateFinalizedLog(FilterLog log, EventLog<InsuranceFinalizedEventDTO> finalizedEvent,
-            ITransactionLogService _transactionLogService, CancellationToken cancellationToken)
+
+
+        private async Task CreatePreSaleOrderCreateLogAsync(FilterLog log,EventLog<PurchasedEventDTO> purchasedEvent)
         {
-            var shieldRef = ByteArray32ToHex(finalizedEvent.Event.InsuranceId);
+            var saleId = ByteArray32ToHex(purchasedEvent.Event.SaleId);
+            var orderId = ByteArray32ToHex(purchasedEvent.Event.OrderId);
 
             _logger.LogInformation(
-                "****************************** InsuranceFinalized: {InsuranceId}, User: {User}, SettlementAmount: {Settlement}, FinalPrice: {FinalPrice}",
-                shieldRef,
-                finalizedEvent.Event.User,
-                finalizedEvent.Event.SettlementAmount,
-                finalizedEvent.Event.FinalPrice
+                "****************************** Purchased: SaleId: {SaleId}, OrderId: {OrderId}, Buyer: {Buyer}, Purchased: {Purchased}, Paid: {Paid}",
+                saleId,
+                orderId,
+                purchasedEvent.Event.Buyer,
+                purchasedEvent.Event.AmountPurchased,
+                purchasedEvent.Event.AmountPaid
             );
 
             SentrySdk.CaptureMessage(
-                $"****************************** InsuranceFinalized: {shieldRef}, User: {finalizedEvent.Event.User}, SettlementAmount: {finalizedEvent.Event.SettlementAmount}, FinalPrice: {finalizedEvent.Event.FinalPrice}"
+                $"****************************** Purchased: SaleId: {saleId}, OrderId: {orderId}, Buyer: {purchasedEvent.Event.Buyer}, Purchased: {purchasedEvent.Event.AmountPurchased}, Paid: {purchasedEvent.Event.AmountPaid}"
             );
 
-            await _transactionLogService.CreateInsuranceFinalizedLogAsync(new _TransactionLog.DTOs.Updates.InsuranceFinalizedLog
+            await _transactionLogService.CreatePreSaleOrderCreateLogAsync(new PreSaleOrderCreateLog
             {
                 Hash = log.TransactionHash,
                 Address = log.Address,
                 BlockNumber = log.BlockNumber.Value,
-                UserWallet = finalizedEvent.Event.User,
-                EventType = Domain.Entities.BlockchainEventType.InsuranceFinalized,
-                ShieldReference = shieldRef,
-                FinalPrice = (decimal)finalizedEvent.Event.FinalPrice,
-                SettlementAmount = Web3.Convert.FromWei(finalizedEvent.Event.SettlementAmount),
-                PayoutToken = finalizedEvent.Event.PayoutToken,
-                PayoutAmount = Web3.Convert.FromWei(finalizedEvent.Event.PayoutAmount)
-            }, cancellationToken);
-
-            lock (_blockLock)
-            {
-                _lastProcessedBlock = BigInteger.Max(_lastProcessedBlock, log.BlockNumber.Value + 1);
-            }
-        }
-
-        private async Task CreateCancelledLog(FilterLog log, EventLog<InsuranceCancelledEventDTO> cancelledEvent,
-            ITransactionLogService _transactionLogService, CancellationToken cancellationToken)
-        {
-            var shieldRef = ByteArray32ToHex(cancelledEvent.Event.InsuranceId);
-
-            _logger.LogInformation(
-                "****************************** InsuranceCancelled: {InsuranceId}, User: {User}",
-                shieldRef,
-                cancelledEvent.Event.User
-            );
-
-            SentrySdk.CaptureMessage(
-                $"****************************** InsuranceCancelled: {shieldRef}, User: {cancelledEvent.Event.User}"
-            );
-
-            await _transactionLogService.CreateInsuranceCancelledLogAsync(new _TransactionLog.DTOs.Updates.InsuranceCancelledLog
-            {
-                Hash = log.TransactionHash,
-                Address = log.Address,
-                BlockNumber = log.BlockNumber.Value,
-                UserWallet = cancelledEvent.Event.User,
-                EventType = Domain.Entities.BlockchainEventType.InsuranceCancelled,
-                ShieldReference = shieldRef
-            }, cancellationToken);
+                Buyer = purchasedEvent.Event.Buyer,
+                SaleId = saleId,
+                OrderId = orderId,
+                AmountPurchased = purchasedEvent.Event.AmountPurchased.ToString(),
+                AmountPaid = purchasedEvent.Event.AmountPaid.ToString(),
+                EventType = BlockchainEventType.PreSaleOrderCreate 
+            });
 
             lock (_blockLock)
             {
@@ -539,7 +496,7 @@ namespace CoinBank.Services._BlockChainWebSocket
 
         private async Task SubscribeToIncomingTransfersAsync(CancellationToken cancellationToken)
         {
-            //just rz usd
+            
             var rzusdAddress = "0xC4A1cc5cA8955a4650BDC109bddf110E33a1e344";
 
             var subscription = new EthLogsObservableSubscription(_webSocketClient);

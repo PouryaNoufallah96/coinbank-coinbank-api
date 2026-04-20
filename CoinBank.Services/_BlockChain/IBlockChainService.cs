@@ -8,6 +8,7 @@ namespace CoinBank.Services._BlockChain
 
         //PreSale
         Task<string> ConfigurePresaleAsync(PreSale preSale);
+        Task<string> ClaimTokensByOperatorAsync(string presaleId, string orderId);
 
 
         //balance Methods

@@ -1,10 +1,10 @@
-﻿using CoinBank.Domain.Collections;
-using Utilities.MongoDatabase.Contracts;
+﻿//using CoinBank.Domain.Collections;
+//using Utilities.MongoDatabase.Contracts;
 
-namespace CoinBank.Domain.Repositories.Contracts
-{
-    public interface IPreSaleReleaseRepository : IMonjoRepository<PreSaleRelease>
-    {
+//namespace CoinBank.Domain.Repositories.Contracts
+//{
+//    public interface IPreSaleReleaseRepository : IMonjoRepository<PreSaleRelease>
+//    {
        
-    }
-}
+//    }
+//}
