@@ -4,26 +4,18 @@
     public static class TokenForwardSaleAbi
     {
         public const string Value = @"
-   [
+       [
     {
         ""type"": ""function"",
-        ""name"": ""batchLiquidateInsurances"",
+        ""name"": ""claimTokensByOperator"",
         ""inputs"": [
             {
-                ""name"": ""insuranceIds"",
-                ""type"": ""bytes32[]"",
-                ""internalType"": ""bytes32[]""
-            }
-        ],
-        ""outputs"": [],
-        ""stateMutability"": ""nonpayable""
-    },
-    {
-        ""type"": ""function"",
-        ""name"": ""finalizeInsurance"",
-        ""inputs"": [
+                ""name"": ""buyer"",
+                ""type"": ""address"",
+                ""internalType"": ""address""
+            },
             {
-                ""name"": ""insuranceId"",
+                ""name"": ""presaleId"",
                 ""type"": ""bytes32"",
                 ""internalType"": ""bytes32""
             }
@@ -33,10 +25,108 @@
     },
     {
         ""type"": ""function"",
-        ""name"": ""getInsurance"",
+        ""name"": ""configurePresale"",
         ""inputs"": [
             {
-                ""name"": ""insuranceId"",
+                ""name"": ""saleId"",
+                ""type"": ""bytes32"",
+                ""internalType"": ""bytes32""
+            },
+            {
+                ""name"": ""token"",
+                ""type"": ""address"",
+                ""internalType"": ""address""
+            },
+            {
+                ""name"": ""totalAllocation"",
+                ""type"": ""uint256"",
+                ""internalType"": ""uint256""
+            },
+            {
+                ""name"": ""maxPerWallet"",
+                ""type"": ""uint256"",
+                ""internalType"": ""uint256""
+            },
+            {
+                ""name"": ""start"",
+                ""type"": ""uint64"",
+                ""internalType"": ""uint64""
+            },
+            {
+                ""name"": ""end"",
+                ""type"": ""uint64"",
+                ""internalType"": ""uint64""
+            },
+            {
+                ""name"": ""vestingData"",
+                ""type"": ""tuple[]"",
+                ""internalType"": ""struct PresaleTypes.VestingCheckpoint[]"",
+                ""components"": [
+                    {
+                        ""name"": ""timestamp"",
+                        ""type"": ""uint64"",
+                        ""internalType"": ""uint64""
+                    },
+                    {
+                        ""name"": ""bps"",
+                        ""type"": ""uint16"",
+                        ""internalType"": ""uint16""
+                    }
+                ]
+            }
+        ],
+        ""outputs"": [],
+        ""stateMutability"": ""nonpayable""
+    },
+    {
+        ""type"": ""function"",
+        ""name"": ""eip712Domain"",
+        ""inputs"": [],
+        ""outputs"": [
+            {
+                ""name"": ""fields"",
+                ""type"": ""bytes1"",
+                ""internalType"": ""bytes1""
+            },
+            {
+                ""name"": ""name"",
+                ""type"": ""string"",
+                ""internalType"": ""string""
+            },
+            {
+                ""name"": ""version"",
+                ""type"": ""string"",
+                ""internalType"": ""string""
+            },
+            {
+                ""name"": ""chainId"",
+                ""type"": ""uint256"",
+                ""internalType"": ""uint256""
+            },
+            {
+                ""name"": ""verifyingContract"",
+                ""type"": ""address"",
+                ""internalType"": ""address""
+            },
+            {
+                ""name"": ""salt"",
+                ""type"": ""bytes32"",
+                ""internalType"": ""bytes32""
+            },
+            {
+                ""name"": ""extensions"",
+                ""type"": ""uint256[]"",
+                ""internalType"": ""uint256[]""
+            }
+        ],
+        ""stateMutability"": ""view""
+    },
+    {
+        ""type"": ""function"",
+        ""name"": ""getPresaleInfo"",
+        ""inputs"": [
+            {
+                ""name"": ""presaleId"",
                 ""type"": ""bytes32"",
                 ""internalType"": ""bytes32""
             }
@@ -45,62 +135,42 @@
             {
                 ""name"": """",
                 ""type"": ""tuple"",
-                ""internalType"": ""struct ShieldStorage.Insurance"",
+                ""internalType"": ""struct PresaleTypes.SaleConfig"",
                 ""components"": [
                     {
-                        ""name"": ""payoutAmount"",
-                        ""type"": ""uint128"",
-                        ""internalType"": ""uint128""
+                        ""name"": ""token"",
+                        ""type"": ""address"",
+                        ""internalType"": ""address""
                     },
                     {
-                        ""name"": ""payoutAmountInUsd"",
-                        ""type"": ""uint128"",
-                        ""internalType"": ""uint128""
-                    },
-                    {
-                        ""name"": ""coverageAmount"",
+                        ""name"": ""allocation"",
                         ""type"": ""uint256"",
                         ""internalType"": ""uint256""
                     },
                     {
-                        ""name"": ""initalPrice"",
+                        ""name"": ""sold"",
+                        ""type"": ""uint256"",
+                        ""internalType"": ""uint256""
+                    },
+                    {
+                        ""name"": ""maxPerWallet"",
+                        ""type"": ""uint256"",
+                        ""internalType"": ""uint256""
+                    },
+                    {
+                        ""name"": ""start"",
                         ""type"": ""uint64"",
                         ""internalType"": ""uint64""
                     },
                     {
-                        ""name"": ""finalPrice"",
+                        ""name"": ""end"",
                         ""type"": ""uint64"",
                         ""internalType"": ""uint64""
                     },
                     {
-                        ""name"": ""startDate"",
-                        ""type"": ""uint64"",
-                        ""internalType"": ""uint64""
-                    },
-                    {
-                        ""name"": ""endDate"",
-                        ""type"": ""uint64"",
-                        ""internalType"": ""uint64""
-                    },
-                    {
-                        ""name"": ""insuredToken"",
-                        ""type"": ""address"",
-                        ""internalType"": ""address""
-                    },
-                    {
-                        ""name"": ""user"",
-                        ""type"": ""address"",
-                        ""internalType"": ""address""
-                    },
-                    {
-                        ""name"": ""insuranceType"",
-                        ""type"": ""uint8"",
-                        ""internalType"": ""enum ShieldStorage.InsuranceType""
-                    },
-                    {
-                        ""name"": ""status"",
-                        ""type"": ""uint8"",
-                        ""internalType"": ""enum ShieldStorage.InsuranceStatus""
+                        ""name"": ""initialized"",
+                        ""type"": ""bool"",
+                        ""internalType"": ""bool""
                     }
                 ]
             }
@@ -109,133 +179,78 @@
     },
     {
         ""type"": ""function"",
-        ""name"": ""insurances"",
+        ""name"": ""getUserAllocation"",
         ""inputs"": [
-            {
-                ""name"": """",
-                ""type"": ""bytes32"",
-                ""internalType"": ""bytes32""
-            }
-        ],
-        ""outputs"": [
-            {
-                ""name"": ""payoutAmount"",
-                ""type"": ""uint128"",
-                ""internalType"": ""uint128""
-            },
-            {
-                ""name"": ""payoutAmountInUsd"",
-                ""type"": ""uint128"",
-                ""internalType"": ""uint128""
-            },
-            {
-                ""name"": ""coverageAmount"",
-                ""type"": ""uint256"",
-                ""internalType"": ""uint256""
-            },
-            {
-                ""name"": ""initalPrice"",
-                ""type"": ""uint64"",
-                ""internalType"": ""uint64""
-            },
-            {
-                ""name"": ""finalPrice"",
-                ""type"": ""uint64"",
-                ""internalType"": ""uint64""
-            },
-            {
-                ""name"": ""startDate"",
-                ""type"": ""uint64"",
-                ""internalType"": ""uint64""
-            },
-            {
-                ""name"": ""endDate"",
-                ""type"": ""uint64"",
-                ""internalType"": ""uint64""
-            },
-            {
-                ""name"": ""insuredToken"",
-                ""type"": ""address"",
-                ""internalType"": ""address""
-            },
             {
                 ""name"": ""user"",
                 ""type"": ""address"",
                 ""internalType"": ""address""
             },
             {
-                ""name"": ""insuranceType"",
-                ""type"": ""uint8"",
-                ""internalType"": ""enum ShieldStorage.InsuranceType""
-            },
+                ""name"": ""presaleId"",
+                ""type"": ""bytes32"",
+                ""internalType"": ""bytes32""
+            }
+        ],
+        ""outputs"": [
             {
-                ""name"": ""status"",
-                ""type"": ""uint8"",
-                ""internalType"": ""enum ShieldStorage.InsuranceStatus""
+                ""name"": """",
+                ""type"": ""tuple"",
+                ""internalType"": ""struct UserTypes.UserAllocation"",
+                ""components"": [
+                    {
+                        ""name"": ""purchased"",
+                        ""type"": ""uint256"",
+                        ""internalType"": ""uint256""
+                    },
+                    {
+                        ""name"": ""claimed"",
+                        ""type"": ""uint256"",
+                        ""internalType"": ""uint256""
+                    },
+                    {
+                        ""name"": ""purchaseCount"",
+                        ""type"": ""uint32"",
+                        ""internalType"": ""uint32""
+                    }
+                ]
             }
         ],
         ""stateMutability"": ""view""
     },
     {
         ""type"": ""function"",
-        ""name"": ""insureToken"",
+        ""name"": ""purchaseTokens"",
         ""inputs"": [
             {
-                ""name"": ""params"",
-                ""type"": ""tuple"",
-                ""internalType"": ""struct ShieldStorage.RegisterInsuranceParams"",
-                ""components"": [
-                    {
-                        ""name"": ""payoutAmount"",
-                        ""type"": ""uint128"",
-                        ""internalType"": ""uint128""
-                    },
-                    {
-                        ""name"": ""payoutAmountInUsd"",
-                        ""type"": ""uint128"",
-                        ""internalType"": ""uint128""
-                    },
-                    {
-                        ""name"": ""coverageAmount"",
-                        ""type"": ""uint256"",
-                        ""internalType"": ""uint256""
-                    },
-                    {
-                        ""name"": ""startDate"",
-                        ""type"": ""uint64"",
-                        ""internalType"": ""uint64""
-                    },
-                    {
-                        ""name"": ""endDate"",
-                        ""type"": ""uint64"",
-                        ""internalType"": ""uint64""
-                    },
-                    {
-                        ""name"": ""initalPrice"",
-                        ""type"": ""uint64"",
-                        ""internalType"": ""uint64""
-                    },
-                    {
-                        ""name"": ""sigDeadline"",
-                        ""type"": ""uint64"",
-                        ""internalType"": ""uint64""
-                    },
-                    {
-                        ""name"": ""insuredToken"",
-                        ""type"": ""address"",
-                        ""internalType"": ""address""
-                    },
-                    {
-                        ""name"": ""user"",
-                        ""type"": ""address"",
-                        ""internalType"": ""address""
-                    },
-                    {
-                        ""name"": ""insuranceType"",
-                        ""type"": ""uint8"",
-                        ""internalType"": ""enum ShieldStorage.InsuranceType""
-                    }
-                ]
+                ""name"": ""saleId"",
+                ""type"": ""bytes32"",
+                ""internalType"": ""bytes32""
+            },
+            {
+                ""name"": ""orderId"",
+                ""type"": ""bytes32"",
+                ""internalType"": ""bytes32""
+            },
+            {
+                ""name"": ""receiveAmount"",
+                ""type"": ""uint256"",
+                ""internalType"": ""uint256""
+            },
+            {
+                ""name"": ""paymentToken"",
+                ""type"": ""address"",
+                ""internalType"": ""address""
+            },
+            {
+                ""name"": ""paymentAmount"",
+                ""type"": ""uint256"",
+                ""internalType"": ""uint256""
+            },
+            {
+                ""name"": ""deadline"",
+                ""type"": ""uint256"",
+                ""internalType"": ""uint256""
             },
             {
                 ""name"": ""signature"",
@@ -247,17 +262,109 @@
         ""stateMutability"": ""nonpayable""
     },
     {
-        ""type"": ""function"",
-        ""name"": ""liquidateInsurance"",
+        ""type"": ""event"",
+        ""name"": ""Claimed"",
         ""inputs"": [
             {
-                ""name"": ""insuranceId"",
+                ""name"": ""saleId"",
                 ""type"": ""bytes32"",
+                ""indexed"": false,
                 ""internalType"": ""bytes32""
+            },
+            {
+                ""name"": ""buyer"",
+                ""type"": ""address"",
+                ""indexed"": false,
+                ""internalType"": ""address""
+            },
+            {
+                ""name"": ""amountClaimed"",
+                ""type"": ""uint256"",
+                ""indexed"": false,
+                ""internalType"": ""uint256""
             }
         ],
-        ""outputs"": [],
-        ""stateMutability"": ""nonpayable""
+        ""anonymous"": false
+    },
+    {
+        ""type"": ""event"",
+        ""name"": ""PresaleConfigured"",
+        ""inputs"": [
+            {
+                ""name"": ""saleId"",
+                ""type"": ""bytes32"",
+                ""indexed"": false,
+                ""internalType"": ""bytes32""
+            },
+            {
+                ""name"": ""token"",
+                ""type"": ""address"",
+                ""indexed"": false,
+                ""internalType"": ""address""
+            },
+            {
+                ""name"": ""totalAllocation"",
+                ""type"": ""uint256"",
+                ""indexed"": false,
+                ""internalType"": ""uint256""
+            },
+            {
+                ""name"": ""maxPerWallet"",
+                ""type"": ""uint256"",
+                ""indexed"": false,
+                ""internalType"": ""uint256""
+            },
+            {
+                ""name"": ""start"",
+                ""type"": ""uint64"",
+                ""indexed"": false,
+                ""internalType"": ""uint64""
+            },
+            {
+                ""name"": ""end"",
+                ""type"": ""uint64"",
+                ""indexed"": false,
+                ""internalType"": ""uint64""
+            }
+        ],
+        ""anonymous"": false
+    },
+    {
+        ""type"": ""event"",
+        ""name"": ""Purchased"",
+        ""inputs"": [
+            {
+                ""name"": ""saleId"",
+                ""type"": ""bytes32"",
+                ""indexed"": false,
+                ""internalType"": ""bytes32""
+            },
+            {
+                ""name"": ""orderId"",
+                ""type"": ""bytes32"",
+                ""indexed"": false,
+                ""internalType"": ""bytes32""
+            },
+            {
+                ""name"": ""buyer"",
+                ""type"": ""address"",
+                ""indexed"": false,
+                ""internalType"": ""address""
+            },
+            {
+                ""name"": ""amountPurchased"",
+                ""type"": ""uint256"",
+                ""indexed"": false,
+                ""internalType"": ""uint256""
+            },
+            {
+                ""name"": ""amountPaid"",
+                ""type"": ""uint256"",
+                ""indexed"": false,
+                ""internalType"": ""uint256""
+            }
+        ],
+        ""anonymous"": false
     },
     {
         ""type"": ""function"",
@@ -267,6 +374,11 @@
                 ""name"": ""user"",
                 ""type"": ""address"",
                 ""internalType"": ""address""
+            },
+            {
+                ""name"": ""saleId"",
+                ""type"": ""bytes32"",
+                ""internalType"": ""bytes32""
             }
         ],
         ""outputs"": [
@@ -277,99 +389,6 @@
             }
         ],
         ""stateMutability"": ""view""
-    },
-    {
-        ""type"": ""event"",
-        ""name"": ""InsuranceCancelled"",
-        ""inputs"": [
-            {
-                ""name"": ""insuranceId"",
-                ""type"": ""bytes32"",
-                ""indexed"": false,
-                ""internalType"": ""bytes32""
-            },
-            {
-                ""name"": ""user"",
-                ""type"": ""address"",
-                ""indexed"": false,
-                ""internalType"": ""address""
-            }
-        ],
-        ""anonymous"": false
-    },
-    {
-        ""type"": ""event"",
-        ""name"": ""InsuranceFinalized"",
-        ""inputs"": [
-            {
-                ""name"": ""insuranceId"",
-                ""type"": ""bytes32"",
-                ""indexed"": false,
-                ""internalType"": ""bytes32""
-            },
-            {
-                ""name"": ""user"",
-                ""type"": ""address"",
-                ""indexed"": false,
-                ""internalType"": ""address""
-            },
-            {
-                ""name"": ""settlementAmount"",
-                ""type"": ""uint256"",
-                ""indexed"": false,
-                ""internalType"": ""uint256""
-            },
-            {
-                ""name"": ""finalPrice"",
-                ""type"": ""uint256"",
-                ""indexed"": false,
-                ""internalType"": ""uint256""
-            },
-            {
-                ""name"": ""payoutToken"",
-                ""type"": ""address"",
-                ""indexed"": false,
-                ""internalType"": ""address""
-            },
-            {
-                ""name"": ""payoutAmount"",
-                ""type"": ""uint256"",
-                ""indexed"": false,
-                ""internalType"": ""uint256""
-            }
-        ],
-        ""anonymous"": false
-    },
-    {
-        ""type"": ""event"",
-        ""name"": ""InsuranceRegistered"",
-        ""inputs"": [
-            {
-                ""name"": ""insuranceId"",
-                ""type"": ""bytes32"",
-                ""indexed"": false,
-                ""internalType"": ""bytes32""
-            },
-            {
-                ""name"": ""user"",
-                ""type"": ""address"",
-                ""indexed"": false,
-                ""internalType"": ""address""
-            },
-            {
-                ""name"": ""insuredToken"",
-                ""type"": ""address"",
-                ""indexed"": false,
-                ""internalType"": ""address""
-            },
-            {
-                ""name"": ""coverageAmount"",
-                ""type"": ""uint256"",
-                ""indexed"": false,
-                ""internalType"": ""uint256""
-            }
-        ],
-        ""anonymous"": false
     }
 ]
     ";

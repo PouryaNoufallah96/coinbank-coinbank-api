@@ -1,11 +1,13 @@
 ﻿using Nethereum.Signer;
 using System.Text;
 using Utilities.Exceptions.Common;
-
 namespace CoinBank.Services._User
 {
     public static class TronAddressHelper
     {
+
+
+
 
         /// <summary>
         /// Recovers a Tron address from a signed message and its signature.
@@ -16,6 +18,16 @@ namespace CoinBank.Services._User
         /// <exception cref="BadRequestException">Thrown when the address recovery fails.</exception>
         public static string RecoverTronAddress(string message, string signatureHex)
         {
+
+            if (signatureHex.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
+                signatureHex = signatureHex[2..];
+
+            string normalizedSignature = signatureHex;
+            if (signatureHex.EndsWith("00"))
+                normalizedSignature = signatureHex.Substring(0, signatureHex.Length - 2) + "1b";
+            else if (signatureHex.EndsWith("01"))
+                normalizedSignature = signatureHex.Substring(0, signatureHex.Length - 2) + "1c";
+
             var signer = new EthereumMessageSigner();
 
             var recoveredEthAddress = signer.EncodeUTF8AndEcRecover(message, signatureHex);

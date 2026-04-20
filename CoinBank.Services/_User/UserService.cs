@@ -64,7 +64,7 @@ namespace CoinBank.Services._User
                 Message = $"Please sign this message to authenticate with CoinBank: {newNonce}"
             };
         }
-
+        
 
         /// <summary>
         /// this method is for get jwt token

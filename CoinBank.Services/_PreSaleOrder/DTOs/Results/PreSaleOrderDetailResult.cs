@@ -6,17 +6,22 @@ namespace CoinBank.Services._PreSaleOrder.DTOs.Results
 {
     public class PreSaleOrderDetailResult : CommonResult
     {
+        public string PreSaleReference { get; set; }
         public string PreSaleOrderReference { get; set; }
         public string Name { get; set; }
         public string Symbol { get; set; }
         public string LogoUrl { get; set; }
         public string WalletAddress { get; set; }
-        public decimal TokenPrice { get; set; }
-        public decimal TotalPrice { get; set; }
-        public decimal TokenAmount { get; set; }
-
+        public decimal TokenPreSalePrice { get; set; }
+        public decimal ReceivingTokenAmount { get; set; }
+        public string ReceivingTokenAmountInWei { get; set; }
+        public string PaymentToken { get; set; }
+        public decimal PaymentTokenAmount { get; set; }
+        public string PaymentTokenAmountInWei { get; set; }
         public PreSaleOrderState State { get; set; }
-        public List<PreSaleReleaseStep> ReleaseSchedule { get; set; }
+        public List<PreSaleOrderReleaseStep> ReleaseSchedule { get; set; }
+        public string Signature { get; set; }
+        public DateTime SignatureExpire { get; set; }
         public List<ReleasesOfPreSaleOrderResult> ReleaseTransactions { get; set; }
         public decimal TotalReleasedTokenAmount { get; set; } 
         public decimal RemainReleaseTokenAmount { get; set; }
