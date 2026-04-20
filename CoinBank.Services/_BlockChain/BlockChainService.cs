@@ -1,4 +1,5 @@
-﻿using CoinBank.Services._BlockChain.DTOs.Settings;
+﻿using CoinBank.Domain.Collections;
+using CoinBank.Services._BlockChain.DTOs.Settings;
 using CoinBank.Services._Common.DTOs.Settings;
 using CoinBank.Services._MultiCallService;
 using CoinBank.Services._MultiCallService.DTOs;
@@ -49,6 +50,221 @@ namespace CoinBank.Services._BlockChain
 
             _web3.TransactionManager.UseLegacyAsDefault = true;
         }
+
+
+        #region PreSale Methods
+
+
+        public async Task<string> ClaimTokensByOperatorAsync(string buyer, string presaleId)
+        {
+            if (string.IsNullOrEmpty(buyer))
+                throw new BadRequestException("Buyer address is required.");
+
+            if (string.IsNullOrEmpty(presaleId))
+                throw new BadRequestException("PresaleId is required.");
+
+            try
+            {
+                var contract = _web3.Eth.GetContract(ContractAbi, _settings.ContractAddress);
+                var function = contract.GetFunction("claimTokensByOperator");
+
+                // تبدیل presaleId به bytes32
+                var presaleIdBytes = HexToByteArray32(presaleId);
+
+                var gasPrice = await GetOptimalGasPriceAsync();
+                var gas = new Nethereum.Hex.HexTypes.HexBigInteger(
+                    _settings.GetDefaultGasLimit());
+
+                var receipt = await function.SendTransactionAndWaitForReceiptAsync(
+                    from: _account.Address,
+                    gas: gas,
+                    gasPrice: new Nethereum.Hex.HexTypes.HexBigInteger(gasPrice),
+                    value: new Nethereum.Hex.HexTypes.HexBigInteger(0),
+                    functionInput: new object[]
+                    {
+                        buyer,
+                        presaleIdBytes
+                    }
+                );
+
+                if (receipt.Status.Value == 1)
+                {
+                    _logger.LogInformation(
+                        "ClaimTokensByOperator successful. TxHash: {TxHash}",
+                        receipt.TransactionHash);
+
+                    return receipt.TransactionHash;
+                }
+
+                _logger.LogError(
+                    "ClaimTokensByOperator failed (reverted). TxHash: {TxHash}",
+                    receipt.TransactionHash);
+
+                return null;
+            }
+            catch (SmartContractRevertException revertEx)
+            {
+                _logger.LogError(
+                    revertEx,
+                    "Contract revert in ClaimTokensByOperator: {Message}",
+                    revertEx.Message);
+
+                return null;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Unexpected error in ClaimTokensByOperator.");
+                return null;
+            }
+        }
+
+        public async Task<string> ConfigurePresaleAsync(PreSale preSale)
+        {
+            if (preSale == null)
+                throw new BadRequestException("PreSale is null.");
+
+            if (string.IsNullOrEmpty(preSale.PreSaleReference))
+                throw new BadRequestException("PreSaleReference is required.");
+
+            var token = _availableTokenData
+                .FirstOrDefault(x => x.Name == preSale.Symbol);
+
+            if (token == null)
+                throw new BadRequestException($"Token config not found for symbol: {preSale.Symbol}");
+
+            try
+            {
+                var contract = _web3.Eth.GetContract(ContractAbi, _settings.ContractAddress);
+                var function = contract.GetFunction("configurePresale");
+
+                var saleIdBytes = HexToByteArray32(preSale.PreSaleReference);
+                var decimals = token.PriceDecimalPlaces;
+
+                var allocationWei = ConvertToWei(preSale.TotalSupply, decimals);
+                var maxPerWalletWei = ConvertToWei(preSale.MaxPerOrder, decimals);
+
+                var startUnix = new DateTimeOffset(NormalizeToUtc(preSale.StartSellingAt))
+                    .ToUnixTimeSeconds();
+
+                var endUnix = new DateTimeOffset(NormalizeToUtc(preSale.EndSellingAt))
+                    .ToUnixTimeSeconds();
+
+                var vestingArray = MapVestingData(preSale.ReleaseSchedule);
+
+                var gasPrice = await GetOptimalGasPriceAsync();
+                var gas = new Nethereum.Hex.HexTypes.HexBigInteger(
+                    _settings.GetDefaultGasLimit());
+
+                var receipt = await function.SendTransactionAndWaitForReceiptAsync(
+                    from: _account.Address,
+                    gas: gas,
+                    gasPrice: new Nethereum.Hex.HexTypes.HexBigInteger(gasPrice),
+                    value: new Nethereum.Hex.HexTypes.HexBigInteger(0),
+                    functionInput: new object[]
+                    {
+                        saleIdBytes,
+                        token.Address,
+                        allocationWei,
+                        maxPerWalletWei,
+                        startUnix,
+                        endUnix,
+                        vestingArray
+                    }
+                );
+
+                if (receipt.Status.Value == 1)
+                {
+                    _logger.LogInformation(
+                        "ConfigurePresale successful. TxHash: {TxHash}",
+                        receipt.TransactionHash);
+
+                    return receipt.TransactionHash;
+                }
+
+                _logger.LogError(
+                    "ConfigurePresale failed (reverted). TxHash: {TxHash}",
+                    receipt.TransactionHash);
+
+                return null;
+            }
+            catch (SmartContractRevertException revertEx)
+            {
+                _logger.LogError(
+                    revertEx,
+                    "Contract revert in configurePresale: {Message}",
+                    revertEx.Message);
+
+                return null;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Unexpected error in configurePresale.");
+                return null;
+            }
+        }
+
+
+        private object[] MapVestingData(List<PreSaleReleaseStep> releaseSchedule)
+        {
+            if (releaseSchedule == null || !releaseSchedule.Any())
+                throw new BadRequestException("Release schedule is required.");
+
+            int totalBps = 0;
+
+            var result = releaseSchedule
+                .OrderBy(x => x.ReleaseDate)
+                .Select(x =>
+                {
+                    var dateUtc = NormalizeToUtc(x.ReleaseDate);
+
+                    var timestamp = (ulong)new DateTimeOffset(dateUtc)
+                        .ToUnixTimeSeconds();
+
+                    var bps = (ushort)Math.Round(
+                        x.Percentage * 100m,
+                        MidpointRounding.AwayFromZero);
+
+                    totalBps += bps;
+
+                    return new object[]
+                    {
+                        timestamp,
+                        bps
+                    };
+                })
+                .ToArray();
+
+            if (totalBps != 10000)
+                throw new BadRequestException("Total vesting must equal 100% (10000 bps).");
+
+            return result;
+        }
+
+
+        DateTime NormalizeToUtc(DateTime dt)
+        {
+            if (dt.Kind == DateTimeKind.Utc)
+                return dt;
+
+            if (dt.Kind == DateTimeKind.Local)
+                return dt.ToUniversalTime();
+
+            return DateTime.SpecifyKind(dt, DateTimeKind.Utc);
+        }
+
+        #endregion
+
+
+
+
+
+
+
+
+
+
+
+
 
         #region Balance Methods
         public async Task<Dictionary<string, decimal>> GetContractBalancesAsync()
@@ -103,6 +319,7 @@ namespace CoinBank.Services._BlockChain
                 return 0;
             }
         }
+
         public async Task<decimal> GetContractRZUSDBalanceAsync()
         {
             try
@@ -394,28 +611,45 @@ namespace CoinBank.Services._BlockChain
         #endregion
 
 
-      
 
-        public async Task<BigInteger> GetNonceAsync(string address)
+        public async Task<BigInteger> GetNonceAsync(string address, string saleId)
         {
             try
             {
-               
-                var insuranceContract = _web3.Eth.GetContract(ContractAbi, _settings.ContractAddress);
-                var noncesFunction = insuranceContract.GetFunction("nonces");
-                var nonce = await noncesFunction.CallAsync<BigInteger>(address);
+                var insuranceContract = _web3.Eth.GetContract(
+                    ContractAbi,
+                    _settings.ContractAddress
+                );
 
-                _logger.LogInformation("Nonce for {address}: {Nonce}", address, nonce);
+                var noncesFunction = insuranceContract.GetFunction("nonces");
+                var saleIdBytes32 = HexToByteArray32(saleId);
+
+                var nonce = await noncesFunction.CallAsync<BigInteger>(
+                    address,
+                    saleIdBytes32
+                );
+
+                _logger.LogInformation(
+                    "Nonce for address {address} and saleId {saleId}: {Nonce}",
+                    address,
+                    saleId,
+                    nonce
+                );
 
                 return nonce;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error getting nonce for address {UserAddress}", address);
+                _logger.LogError(
+                    ex,
+                    "Error getting nonce for address {UserAddress} and saleId {saleId}",
+                    address,
+                    saleId
+                );
+
                 throw;
             }
         }
-
 
         private AvailableTokenData ValidateToken(string tokenName)
         {
@@ -428,6 +662,45 @@ namespace CoinBank.Services._BlockChain
             return tokenData;
         }
 
+        public static byte[] HexToByteArray32(string hex)
+        {
+            if (string.IsNullOrEmpty(hex))
+                throw new ArgumentException("Hex string is null or empty");
+
+            var bytes = Nethereum.Hex.HexConvertors.Extensions.HexByteConvertorExtensions.HexToByteArray(hex);
+
+            if (bytes.Length > 32)
+                throw new ArgumentException("Hex string is too long for bytes32");
+
+            var padded = new byte[32];
+            Array.Copy(bytes, 0, padded, 32 - bytes.Length, bytes.Length);
+
+            return padded;
+        }
+
+        private async Task<BigInteger> GetOptimalGasPriceAsync()
+        {
+            try
+            {
+                var currentGasPrice = await _web3.Eth.GasPrice.SendRequestAsync();
+
+                var suggestedGasPrice = (BigInteger)((decimal)currentGasPrice.Value * 1.2m);
+
+                var minGasPrice = UnitConversion.Convert.ToWei(_settings.GetMinGasPriceGwei(), UnitConversion.EthUnit.Gwei);
+                var maxGasPrice = UnitConversion.Convert.ToWei(_settings.GetMaxGasPriceGwei(), UnitConversion.EthUnit.Gwei);
+
+                var optimalPrice = BigInteger.Min(BigInteger.Max(suggestedGasPrice, minGasPrice), maxGasPrice);
+
+                _logger.LogInformation($"Using gas price: {UnitConversion.Convert.FromWei(optimalPrice, UnitConversion.EthUnit.Gwei)} Gwei");
+                return optimalPrice;
+            }
+            catch
+            {
+                var defaultPrice = UnitConversion.Convert.ToWei(_settings.GetDefaultGasPriceGwei(), UnitConversion.EthUnit.Gwei);
+                _logger.LogWarning($"Using DEFAULT gas price: {_settings.GetDefaultGasPriceGwei()} Gwei");
+                return defaultPrice;
+            }
+        }
 
     }
 }

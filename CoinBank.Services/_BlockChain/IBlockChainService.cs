@@ -1,10 +1,14 @@
-﻿using System.Numerics;
+﻿using CoinBank.Domain.Collections;
+using System.Numerics;
 
 namespace CoinBank.Services._BlockChain
 {
     public interface IBlockChainService
     {
-      
+
+        //PreSale
+        Task<string> ConfigurePresaleAsync(PreSale preSale);
+
 
         //balance Methods
         Task<Dictionary<string, decimal>> GetContractBalancesAsync();
@@ -21,7 +25,7 @@ namespace CoinBank.Services._BlockChain
 
 
        
-        Task<BigInteger> GetNonceAsync(string userAddress);
+        Task<BigInteger> GetNonceAsync(string address, string saleId);
 
     }
 }

@@ -1,10 +1,12 @@
 ﻿using CoinBank.Domain.Collections;
 using CoinBank.Domain.Repositories.Contracts;
+using CoinBank.Services._BlockChain;
+using CoinBank.Services._Common.DTOs.Settings;
+using CoinBank.Services._Common.Services;
 using CoinBank.Services._PreSale.DTOs.Results;
 using CoinBank.Services._PreSale.DTOs.Storages;
 using CoinBank.Services._PreSale.DTOs.Updates;
-using CoinBank.Services._PreSaleOrder;
-using CoinBank.Services._PreSaleOrder.DTOs.Updates;
+using Microsoft.IdentityModel.Tokens;
 using MongoDB.Driver;
 using MongoDB.Driver.Linq;
 using Utilities.DTOs;
@@ -15,9 +17,11 @@ namespace CoinBank.Services._PreSale
 {
     public class PreSaleService(IPreSaleRepository _preSaleRepository,
         IPreSaleOrderRepository _preSaleOrderRepository,
+        IBlockChainService _blockChainService,
+        AvailableTokensSettings _availableTokenData,
         PreSaleStorage _preSaleStorage) : IPreSaleService, IScopedDependency
 
-    {
+    { 
 
         public async Task<PreSaleResult> CreatePreSaleTokenAsync(CreatePreSaleTokenUpdate update)
         {
@@ -25,13 +29,13 @@ namespace CoinBank.Services._PreSale
             var symbol = update.Symbol.Trim().ToUpper();
 
             var existing = await _preSaleRepository.AsQueryable().FirstOrDefaultAsync(q => q.Symbol == symbol && q.State == PreSaleState.Active);
-
+            
             if (existing != null)
                 throw new BadRequestException("Active PreSale with this symbol already exists.");
 
             var newPreSale = new PreSale
             {
-                PreSaleReference = Guid.NewGuid().ToString("N"),
+                PreSaleReference = IdGenerartor.GenerateBytes32HexId(),
                 Name = update.Name,
                 Symbol = symbol,
                 LogoUrl = update.LogoUrl,
@@ -47,14 +51,16 @@ namespace CoinBank.Services._PreSale
                 RegisterMoment = null
             };
 
-            //TODO : send to blockChain For submit
-            // use if in product
-            newPreSale.RegisterHash = "";
+      
+            var registerHash = await _blockChainService.ConfigurePresaleAsync(newPreSale);
+
+            if (registerHash == null || registerHash.IsNullOrEmpty()) throw new BadRequestException("Error in submit on blockChain!");
+
+            newPreSale.RegisterHash = registerHash;
             newPreSale.RegisterMoment = DateTime.UtcNow;
             newPreSale.State = PreSaleState.Active;
 
             await _preSaleRepository.InsertOneAsync(newPreSale);
-
 
             await SyncPreSaleToStorageAsync(newPreSale);
             return MapToResult(newPreSale);
@@ -80,7 +86,7 @@ namespace CoinBank.Services._PreSale
                 {
                     PreSaleReference = g.Key,
                     OrderCount = g.Count(),
-                    TotalBought = g.Sum(x => x.TokenAmount)
+                    TotalBought = g.Sum(x => x.ReceivingTokenAmount)
                 })
                 .ToListAsync();
 
@@ -177,7 +183,7 @@ namespace CoinBank.Services._PreSale
                     .AsQueryable()
                     .Where(q => q.PreSaleReference == preSaleReference)
                     .Where(q => q.State == PreSaleOrderState.InProgress || q.State == PreSaleOrderState.Completed)
-                    .SumAsync(x => (decimal?)x.TokenAmount) ?? 0;
+                    .SumAsync(x => (decimal?)x.ReceivingTokenAmount) ?? 0;
 
             var data = new PreSaleData
             {
@@ -212,7 +218,7 @@ namespace CoinBank.Services._PreSale
                     .AsQueryable()
                     .Where(q => q.PreSaleReference == preSaleReference)
                     .Where(q => q.State == PreSaleOrderState.InProgress || q.State == PreSaleOrderState.Completed)
-                    .SumAsync(x => (decimal?)x.TokenAmount) ?? 0;
+                    .SumAsync(x => (decimal?)x.ReceivingTokenAmount) ?? 0;
 
             var data = new PreSaleData
             {
@@ -270,7 +276,7 @@ namespace CoinBank.Services._PreSale
                 .Select(g => new
                 {
                     PreSaleReference = g.Key,
-                    TotalSupplied = g.Sum(x => (decimal?)x.TokenAmount) ?? 0
+                    TotalSupplied = g.Sum(x => (decimal?)x.ReceivingTokenAmount) ?? 0
                 })
                 .ToListAsync();
 
@@ -379,7 +385,7 @@ namespace CoinBank.Services._PreSale
         {
             if (update == null)
                 throw new Exception("Request is null.");
-
+            ValidateToken(update.Symbol);
             ValidatePerOrderAmounts(update);
             ValidateTimeRange(update);
             ValidateReleaseSchedule(update);
@@ -437,6 +443,16 @@ namespace CoinBank.Services._PreSale
         }
 
 
+        private AvailableTokenData ValidateToken(string tokenName)
+        {
+
+            if (tokenName == null)
+                throw new BadRequestException($"Unsupported token name! {tokenName}");
+
+            var tokenData = _availableTokenData.FirstOrDefault(q => q.Name.Equals(tokenName, StringComparison.OrdinalIgnoreCase))
+                ?? throw new BadRequestException($"Unsupported token name! {tokenName}");
+            return tokenData;
+        }
 
         #endregion
 

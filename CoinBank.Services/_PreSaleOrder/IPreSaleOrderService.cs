@@ -17,5 +17,6 @@ namespace CoinBank.Services._PreSaleOrder
 
         //internal
         Task RemoveNotRegisteredPreSaleOrderAsync();
+        Task ProcessReleaseOrderAsync();
     }
 }

@@ -28,7 +28,6 @@
 
 
 	<ItemGroup>
-	  <Folder Include="_Common\Services\" />
 	  <Folder Include="_PreSaleRelease\DTOs\Updates\" />
 	  <Folder Include="_Price\DTOs\Updates\" />
 	</ItemGroup>
