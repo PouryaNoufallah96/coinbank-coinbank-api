@@ -21,7 +21,7 @@ namespace CoinBank.Services._PreSale
         AvailableTokensSettings _availableTokenData,
         PreSaleStorage _preSaleStorage) : IPreSaleService, IScopedDependency
 
-    { 
+    {
 
         public async Task<PreSaleResult> CreatePreSaleTokenAsync(CreatePreSaleTokenUpdate update)
         {
@@ -29,7 +29,7 @@ namespace CoinBank.Services._PreSale
             var symbol = update.Symbol.Trim().ToUpper();
 
             var existing = await _preSaleRepository.AsQueryable().FirstOrDefaultAsync(q => q.Symbol == symbol && q.State == PreSaleState.Active);
-            
+
             if (existing != null)
                 throw new BadRequestException("Active PreSale with this symbol already exists.");
 
@@ -51,7 +51,7 @@ namespace CoinBank.Services._PreSale
                 RegisterMoment = null
             };
 
-      
+
             var registerHash = await _blockChainService.ConfigurePresaleAsync(newPreSale);
 
             if (registerHash == null || registerHash.IsNullOrEmpty()) throw new BadRequestException("Error in submit on blockChain!");
@@ -147,7 +147,7 @@ namespace CoinBank.Services._PreSale
         {
             var now = DateTime.UtcNow;
 
-           
+
             var expiredPreSales = await _preSaleRepository
                 .AsQueryable()
                 .Where(x => x.State == PreSaleState.Active && x.EndSellingAt < now)
@@ -156,7 +156,7 @@ namespace CoinBank.Services._PreSale
             if (!expiredPreSales.Any())
                 return;
 
-            
+
             foreach (var preSale in expiredPreSales)
             {
                 var update = Builders<PreSale>.Update
@@ -257,7 +257,7 @@ namespace CoinBank.Services._PreSale
 
             var presales = await _preSaleRepository
                 .AsQueryable().
-                Where(q => q.State == PreSaleState.Active ||  q.State == PreSaleState.Expired)
+                Where(q => q.State == PreSaleState.Active || q.State == PreSaleState.Expired)
                 .ToListAsync();
 
             if (presales == null || presales.Count == 0)
@@ -266,7 +266,7 @@ namespace CoinBank.Services._PreSale
                 return;
             }
 
-       
+
             var ordersGrouped = await _preSaleOrderRepository
                 .AsQueryable()
                 .Where(x =>
@@ -283,8 +283,10 @@ namespace CoinBank.Services._PreSale
             var ordersDict = ordersGrouped
                 .ToDictionary(x => x.PreSaleReference, x => x.TotalSupplied);
 
-     
+
             var storageList = new List<PreSaleData>();
+
+            var allbalances = await _blockChainService.GetContractBalancesAsync();
 
             foreach (var presale in presales)
             {
@@ -295,6 +297,8 @@ namespace CoinBank.Services._PreSale
                         presale.TotalSupply - totalSupplied,
                         presale.MaxPerOrder
                     );
+
+                var balance = allbalances[presale.Symbol];
 
                 var data = new PreSaleData
                 {
@@ -317,7 +321,7 @@ namespace CoinBank.Services._PreSale
                     StartSellingAt = presale.StartSellingAt,
                     EndSellingAt = presale.EndSellingAt,
                     ReleaseSchedule = presale.ReleaseSchedule,
-
+                    ContractBalance = balance,
                     State = presale.State,
                     LastUpdated = DateTime.UtcNow
                 };
@@ -329,6 +333,12 @@ namespace CoinBank.Services._PreSale
         }
 
 
+
+        public async Task SyncPreSaleTokenBalanceAsync(string tokenName)
+        {
+            var balance = await _blockChainService.GetContractSingleBalanceAsync(tokenName);
+            _preSaleStorage.UpdateContractBalance(tokenName, balance);
+        }
 
         //public async Task SyncCompletedPreSalesAsync()
         //{
@@ -453,6 +463,8 @@ namespace CoinBank.Services._PreSale
                 ?? throw new BadRequestException($"Unsupported token name! {tokenName}");
             return tokenData;
         }
+
+
 
         #endregion
 

@@ -2,6 +2,7 @@
 using CoinBank.Services._BlockChain.DTOs.Settings;
 using CoinBank.Services._BlockChainWebSocket.DTOs;
 using CoinBank.Services._Common.DTOs.Settings;
+using CoinBank.Services._PreSale;
 using CoinBank.Services._Transaction;
 using CoinBank.Services._Transaction.DTOs.Updates;
 using Microsoft.Extensions.DependencyInjection;
@@ -26,6 +27,7 @@ namespace CoinBank.Services._BlockChainWebSocket
         private readonly IServiceScopeFactory _scopeFactory;
         private readonly BlockChainSettings blockChainSettings;
         private readonly ITransactionLogService _transactionLogService;
+        private readonly IPreSaleService _preSaleService;
         private readonly ILogger<BlockChainEventBackgroundService> _logger;
         private readonly BlockchainWebSocketSetting _settings;
         private BigInteger _lastProcessedBlock = 0;
@@ -48,11 +50,13 @@ namespace CoinBank.Services._BlockChainWebSocket
         public BlockChainEventBackgroundService(
             BlockChainSettings blockChainSettings,
             ITransactionLogService transactionLogService,
+            IPreSaleService preSaleService,
             ILogger<BlockChainEventBackgroundService> logger,
             BlockchainWebSocketSetting settings)
         {
             this.blockChainSettings = blockChainSettings;
             _transactionLogService = transactionLogService;
+            _preSaleService = preSaleService;
             _logger = logger;
             _settings = settings;
             _web3 = new Web3(settings.WsUrl2);
@@ -303,7 +307,7 @@ namespace CoinBank.Services._BlockChainWebSocket
 
                 using var scope = _scopeFactory.CreateScope();
                 var transactionLogService = scope.ServiceProvider.GetRequiredService<ITransactionLogService>();
-                var lastDbBlock = await transactionLogService.GetLastCheckedBlockNumberAsync(cancellationToken);
+                var lastDbBlock = await transactionLogService.GetLastCheckedBlockNumberAsync();
 
                 lock (_blockLock)
                 {
@@ -496,32 +500,33 @@ namespace CoinBank.Services._BlockChainWebSocket
 
         private async Task SubscribeToIncomingTransfersAsync(CancellationToken cancellationToken)
         {
-            
-            var rzusdAddress = "0xC4A1cc5cA8955a4650BDC109bddf110E33a1e344";
+            var tokenAddresses = _availableTokensSettings
+                .Select(t => t.Address.ToLower())
+                .ToList();
 
             var subscription = new EthLogsObservableSubscription(_webSocketClient);
 
             var safeObservable = subscription.GetSubscriptionDataResponsesAsObservable()
-            .Where(log => log.Address.Equals(rzusdAddress, StringComparison.OrdinalIgnoreCase))
-            .Select(log => Observable.FromAsync(() => ProcessIncomingTransferLogAsync(log)))
-            .Concat();
+                .Where(log => tokenAddresses.Contains(log.Address.ToLower()))
+                .Select(log => Observable.FromAsync(() => ProcessIncomingTransferLogAsync(log)))
+                .Concat();
 
             _incomingTransferSubscription = safeObservable.Subscribe(
-            _ => { },
-            async ex =>
-            {
-                _logger.LogError(ex, "Error in RZUSD incoming transfer subscription. Reconnecting...");
-                _ = Task.Run(async () => await TryConnectWithRetryAsync(cancellationToken));
-            },
-            () =>
-            {
-                _logger.LogWarning("RZUSD incoming transfer subscription completed unexpectedly. Reconnecting...");
-                _ = Task.Run(async () => await TryConnectWithRetryAsync(cancellationToken));
-            });
+                _ => { },
+                async ex =>
+                {
+                    _logger.LogError(ex, "Error in incoming transfer subscription. Reconnecting...");
+                    _ = Task.Run(async () => await TryConnectWithRetryAsync(cancellationToken));
+                },
+                () =>
+                {
+                    _logger.LogWarning("Incoming transfer subscription completed unexpectedly. Reconnecting...");
+                    _ = Task.Run(async () => await TryConnectWithRetryAsync(cancellationToken));
+                });
 
             var filter = new NewFilterInput
             {
-                Address = new[] { rzusdAddress, _settings.ContractAddress.ToLower() }
+                Address = tokenAddresses.Concat(new[] { _settings.ContractAddress }).ToArray()
             };
 
             await subscription.SubscribeAsync(filter);
@@ -539,9 +544,7 @@ namespace CoinBank.Services._BlockChainWebSocket
 
                     _logger.LogInformation("Incoming {Token} Transfer: {Amount} from {From}", token.Name, amount, transferEvent.Event.From);
 
-                    using var scope = _scopeFactory.CreateScope();
-                    var _inventoryService = scope.ServiceProvider.GetRequiredService<IInventoryService>();
-                    await _inventoryService.SyncRZUSDAmountAsync();
+                    await _preSaleService.SyncPreSaleTokenBalanceAsync(token.Name.ToUpper());
                 }
             }
             catch (Exception ex)
@@ -549,7 +552,6 @@ namespace CoinBank.Services._BlockChainWebSocket
                 _logger.LogError(ex, "Error processing incoming token transfer");
             }
         }
-
 
         private static string ByteArray32ToHex(byte[] bytes)
         {
