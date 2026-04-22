@@ -72,7 +72,13 @@ services:
       - ApplicationPoolSettings__Applications__2__ApplicationId=$applicationpoolsettings_applications_2_application_id
       - ApplicationPoolSettings__Applications__2__PreSharedKey=$applicationpoolsettings_applications_2_pre_shared_key
       - ApplicationPoolSettings__Applications__2__MasterSignature=$applicationpoolsettings_applications_2_master_signature
+  tron.coinbank.com:
+    build:
+      context: ./tron-verifier
+      dockerfile: ./Dockerfile
+    container_name: tron-verifier
+    restart: unless-stopped
+    expose:
+      - "3001"
 
-networks:
-  coinbank-net:
-    driver: bridge
+   
