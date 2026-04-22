@@ -90,8 +90,6 @@ namespace CoinBank.Services._PreSaleOrder
             newOrder.SignatureExpire = signatureExpirer;
 
             await _preSaleOrderRepository.InsertOneAsync(newOrder);
-            //TODO : remove later
-            //await _preSaleService.SyncPreSaleToStorageAsync(presale.PreSaleReference);
 
             return ConvertToResult(newOrder);
         }
@@ -319,7 +317,7 @@ namespace CoinBank.Services._PreSaleOrder
                 order.State = PreSaleOrderState.InProgress;
 
                 await _preSaleOrderRepository.ReplaceOneAsync(order);
-
+                await _preSaleService.SyncPreSaleToStorageAsync(order.PreSaleReference);
             }
         }
 
