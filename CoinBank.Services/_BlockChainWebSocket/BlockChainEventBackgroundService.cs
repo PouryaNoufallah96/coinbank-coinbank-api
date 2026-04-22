@@ -24,7 +24,6 @@ namespace CoinBank.Services._BlockChainWebSocket
 {
     public class BlockChainEventBackgroundService : BackgroundService, IHostedDependency
     {
-        private readonly IServiceScopeFactory _scopeFactory;
         private readonly BlockChainSettings blockChainSettings;
         private readonly ITransactionLogService _transactionLogService;
         private readonly IPreSaleService _preSaleService;
@@ -304,10 +303,8 @@ namespace CoinBank.Services._BlockChainWebSocket
                     if (_lastProcessedBlock > 0)
                         return _lastProcessedBlock.ToHexBigInteger();
                 }
-
-                using var scope = _scopeFactory.CreateScope();
-                var transactionLogService = scope.ServiceProvider.GetRequiredService<ITransactionLogService>();
-                var lastDbBlock = await transactionLogService.GetLastCheckedBlockNumberAsync();
+               
+                var lastDbBlock = await _transactionLogService.GetLastCheckedBlockNumberAsync();
 
                 lock (_blockLock)
                 {
