@@ -6,6 +6,8 @@ services:
     restart: unless-stopped
     ports:
       - "127.0.0.1:3013:80"
+    networks:
+      - coinbank-net
     volumes:
       - "/etc/timezone:/etc/timezone:ro"
       - "/etc/localtime:/etc/localtime:ro"
@@ -71,4 +73,6 @@ services:
       - ApplicationPoolSettings__Applications__2__PreSharedKey=$applicationpoolsettings_applications_2_pre_shared_key
       - ApplicationPoolSettings__Applications__2__MasterSignature=$applicationpoolsettings_applications_2_master_signature
 
-    
+networks:
+  coinbank-net:
+    driver: bridge
