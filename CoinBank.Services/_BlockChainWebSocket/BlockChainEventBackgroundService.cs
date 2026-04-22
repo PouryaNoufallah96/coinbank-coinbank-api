@@ -50,6 +50,7 @@ namespace CoinBank.Services._BlockChainWebSocket
             BlockChainSettings blockChainSettings,
             ITransactionLogService transactionLogService,
             IPreSaleService preSaleService,
+            AvailableTokensSettings availableTokensSettings,
             ILogger<BlockChainEventBackgroundService> logger,
             BlockchainWebSocketSetting settings)
         {
@@ -58,6 +59,7 @@ namespace CoinBank.Services._BlockChainWebSocket
             _preSaleService = preSaleService;
             _logger = logger;
             _settings = settings;
+            _availableTokensSettings = availableTokensSettings;
             _web3 = new Web3(settings.WsUrl2);
         }
 
