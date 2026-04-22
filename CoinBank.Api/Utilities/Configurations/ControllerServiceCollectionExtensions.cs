@@ -4,6 +4,7 @@ using CoinBank.Services._Common.DTOs.Settings;
 using CoinBank.Services._File.DTOs.Settings;
 using CoinBank.Services._Price.DTOs.Settings;
 using CoinBank.Services._Stake.DTOs.Settings;
+using CoinBank.Services._User.DTOs.Settings;
 using Microsoft.Extensions.Options;
 
 
@@ -20,6 +21,7 @@ namespace CoinBank.Api.Utilities.Configurations
             services.RegisterSetting<StakeSetting>(configuration.GetSection(nameof(StakeSetting)));
             services.RegisterSetting<FileSettings>(configuration.GetSection(nameof(FileSettings)));
             services.RegisterSetting<PriceSetting>(configuration.GetSection(nameof(PriceSetting)));
+            services.RegisterSetting<VerifyTronServiceSettings>(configuration.GetSection(nameof(VerifyTronServiceSettings)));
         }
 
         private static void RegisterSetting<TSettings>(this IServiceCollection services, IConfigurationSection configuration)
