@@ -27,10 +27,15 @@ namespace CoinBank.Services._User
     IRandomService _randomService,
     JwtServiceSettings _jwtSettings,
     IJwtService _jwtService,
+    VerifyTronServiceSettings _verifyTronServiceSettings,
     ILogger<UserService> _logger,
     IUserRepository _userRepository,
     UserAuthStorage _userAuthStorage) : IUserService, IScopedDependency
     {
+        private static readonly HttpClient _httpClient = new HttpClient
+        {
+            Timeout = TimeSpan.FromSeconds(10)
+        };
 
         /// <summary>
         /// used for create one time nonce
@@ -64,7 +69,7 @@ namespace CoinBank.Services._User
                 Message = $"Please sign this message to authenticate with CoinBank: {newNonce}"
             };
         }
-        
+
 
         /// <summary>
         /// this method is for get jwt token
@@ -82,7 +87,7 @@ namespace CoinBank.Services._User
             var userAuthData = ValidateNonce(update.Nonce, update.WalletAddress, update.WalletType);
 
             var message = $"Please sign this message to authenticate with CoinBank: {update.Nonce}";
-            VerifySignature(message, update.Signature, userAuthData.WalletAddress, update.WalletType);
+            await VerifySignature(message, update.Signature, userAuthData.WalletAddress, update.WalletType);
 
             var user = await GetOrCreateUserAsync(userAuthData.WalletAddress, update.WalletType);
 
@@ -245,7 +250,7 @@ namespace CoinBank.Services._User
         /// from the provided message and signature. It ensures that the signature is valid for the given wallet
         /// address according to the Ethereum (EVM) signing standard.
         /// </remarks>
-        private void VerifySignature(string message, string signatureHex, string walletAddress, WalletType walletType)
+        private async Task VerifySignature(string message, string signatureHex, string walletAddress, WalletType walletType)
         {
             // 1. Basic validation
             if (string.IsNullOrWhiteSpace(message) ||
@@ -255,7 +260,6 @@ namespace CoinBank.Services._User
                 throw new BadRequestException("Invalid input!");
             }
 
-            signatureHex = NormalizeHex(signatureHex);
             walletAddress = walletAddress.Trim();
 
             if (!IsValidSignature(signatureHex))
@@ -266,13 +270,12 @@ namespace CoinBank.Services._User
                 string recoveredAddress = walletType switch
                 {
                     WalletType.EVM => RecoverEvmAddress(message, signatureHex),
-                    WalletType.TRON => RecoverTronAddress(message, signatureHex),
+                    WalletType.TRON => await VerifyTronSignatureWithNode(message, signatureHex, walletAddress),
                     _ => throw new BadRequestException("Invalid wallet type")
                 };
 
-                recoveredAddress = recoveredAddress.Trim();
 
-                if (!string.Equals(recoveredAddress, walletAddress, StringComparison.OrdinalIgnoreCase))
+                if (recoveredAddress == null || !string.Equals(recoveredAddress.Trim(), walletAddress, StringComparison.OrdinalIgnoreCase))
                 {
                     throw new BadRequestException("Invalid signature for wallet");
                 }
@@ -287,7 +290,6 @@ namespace CoinBank.Services._User
             }
         }
 
-
         /// <summary>
         /// Recovers the Ethereum address from a signed message and its signature.
         /// </summary>
@@ -301,17 +303,17 @@ namespace CoinBank.Services._User
         }
 
 
-        /// <summary>
-        /// Recovers a Tron address from a signed message and its signature.
-        /// </summary>
-        /// <param name="message">The original signed message.</param>
-        /// <param name="signatureHex">The signature in hexadecimal format.</param>
-        /// <returns>The recovered Tron address in Base58Check format.</returns>
-        /// <exception cref="BadRequestException">Thrown when the address recovery fails.</exception>
-        private string RecoverTronAddress(string message, string signatureHex)
-        {
-            return TronAddressHelper.RecoverTronAddress(message, signatureHex);
-        }
+        ///// <summary>
+        ///// Recovers a Tron address from a signed message and its signature.
+        ///// </summary>
+        ///// <param name="message">The original signed message.</param>
+        ///// <param name="signatureHex">The signature in hexadecimal format.</param>
+        ///// <returns>The recovered Tron address in Base58Check format.</returns>
+        ///// <exception cref="BadRequestException">Thrown when the address recovery fails.</exception>
+        //private string RecoverTronAddress(string message, string signatureHex)
+        //{
+        //    return TronAddressHelper.RecoverTronAddress(message, signatureHex);
+        //}
 
 
         /// <summary>
@@ -574,6 +576,61 @@ namespace CoinBank.Services._User
             return result;
         }
 
+
+
+        public async Task<string?> VerifyTronSignatureWithNode(string message, string signature, string walletAddress)
+        {
+            try
+            {
+                using var httpClient = new HttpClient();
+                httpClient.Timeout = TimeSpan.FromSeconds(10);
+
+                var payload = new
+                {
+                    message,
+                    signature,
+                    address = walletAddress
+                };
+
+                var content = new StringContent(
+                    System.Text.Json.JsonSerializer.Serialize(payload),
+                    Encoding.UTF8,
+                    "application/json"
+                );
+
+                var response = await httpClient.PostAsync(
+                    $"{_verifyTronServiceSettings.BaseUrl}/verify",
+                    content
+                );
+
+                if (!response.IsSuccessStatusCode)
+                    return null;
+
+                var json = await response.Content.ReadAsStringAsync();
+
+                var result = System.Text.Json.JsonSerializer.Deserialize<TronVerificationServiceResponse>(
+                    json,
+                    new System.Text.Json.JsonSerializerOptions
+                    {
+                        PropertyNameCaseInsensitive = true
+                    });
+
+                if (result == null || !result.valid)
+                    return null;
+
+                return result.recoveredAddress;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+
+
+
         #endregion
     }
+
+
 }
