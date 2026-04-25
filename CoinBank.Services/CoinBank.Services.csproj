@@ -30,6 +30,7 @@
 	<ItemGroup>
 	  <Folder Include="_PreSaleRelease\DTOs\Updates\" />
 	  <Folder Include="_Price\DTOs\Updates\" />
+	  <Folder Include="_Swap\_Hub\" />
 	</ItemGroup>
 
 </Project>
