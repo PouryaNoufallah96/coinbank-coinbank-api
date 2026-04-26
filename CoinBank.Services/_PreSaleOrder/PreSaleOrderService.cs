@@ -46,6 +46,12 @@ namespace CoinBank.Services._PreSaleOrder
             var presale = await _preSaleService
                 .GetPreSaleDataByReferenceForInternalUsageAsync(update.PreSaleReference);
 
+            if (presale.StartSellingAt > DateTime.UtcNow)
+                throw new BadRequestException($"Pre-sale starts at {presale.StartSellingAt}");
+
+            if (presale.EndSellingAt < DateTime.UtcNow)
+                throw new BadRequestException("Pre-sale has ended");
+
             var userOrders = await GetUserActiveOrders(presale.PreSaleReference, publicKey);
 
             ValidateUserOrderCount(userOrders);
@@ -337,7 +343,7 @@ namespace CoinBank.Services._PreSaleOrder
                     .Where(x => x.State == PreSaleOrderState.InProgress)
                     .Where(x => x.ReleaseSchedule.Any(r =>
                         r.ReleaseDate <= now &&
-                        r.RegisterMoment != null
+                        r.RegisterMoment == null
                     ));
 
                 var order = await query.FirstOrDefaultAsync();

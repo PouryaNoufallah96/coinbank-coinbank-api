@@ -165,7 +165,6 @@ namespace CoinBank.Services._BlockChainWebSocket
             return TimeSpan.FromSeconds(delaySeconds);
         }
 
-
         private async Task ConnectAndSubscribe(CancellationToken cancellationToken)
         {
             _logger.LogInformation("...........ConnectAndSubscribe touched............");
@@ -271,7 +270,7 @@ namespace CoinBank.Services._BlockChainWebSocket
 
             var safeObservable = subscription.GetSubscriptionDataResponsesAsObservable()
            .Where(log => log.Address.IsTheSameAddress(_settings.PreSaleContractAddress))
-           .Select(log => Observable.FromAsync(() => ProcessContractEventLogAsync(log, cancellationToken)))
+           .Select(log => Observable.FromAsync(() => PreSaleProcessContractEventLogAsync(log, cancellationToken)))
            .Concat();
 
             _preSaleContractEventsSubscription = safeObservable.Subscribe(
@@ -340,7 +339,7 @@ namespace CoinBank.Services._BlockChainWebSocket
             }
         }
 
-        private async Task ProcessContractEventLogAsync(FilterLog log, CancellationToken cancellationToken)
+        private async Task PreSaleProcessContractEventLogAsync(FilterLog log, CancellationToken cancellationToken)
         {
             try
             {
@@ -519,7 +518,6 @@ namespace CoinBank.Services._BlockChainWebSocket
                 else if (to.IsTheSameAddress(_settings.StakeContractAddress))
                 {
                     _logger.LogInformation("Stake Side : {Token} {Amount} from {From}", token.Name, amount, transferEvent.Event.From);
-
                     //TODO : complete
                 }
             }
