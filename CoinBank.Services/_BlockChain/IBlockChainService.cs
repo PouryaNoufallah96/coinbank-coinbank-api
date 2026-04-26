@@ -1,4 +1,5 @@
 ﻿using CoinBank.Domain.Collections;
+using CoinBank.Services._BlockChain.DTOs.Updates;
 using System.Numerics;
 
 namespace CoinBank.Services._BlockChain
@@ -7,14 +8,14 @@ namespace CoinBank.Services._BlockChain
     {
 
         //PreSale
-        Task<string> ConfigurePresaleAsync(PreSale preSale);
-        Task<string> ClaimTokensByOperatorAsync(string presaleId, string orderId);
+        Task<string> PreSaleConfigureAsync(PreSale preSale);
+        Task<string> PreSaleOrderClaimTokensByOperatorAsync(string presaleId, string orderId);
 
 
         //balance Methods
-        Task<Dictionary<string, decimal>> GetContractBalancesAsync();
-        Task<decimal> GetContractSingleBalanceAsync(string tokenName);
-        Task<Dictionary<string, decimal>> GetBalancesMultiCallAsync();
+        Task<Dictionary<string, decimal>> GetContractBalancesAsync(ContractType contractType);
+        Task<decimal> GetContractSingleBalanceAsync(string tokenName, ContractType contractType);
+        Task<Dictionary<string, decimal>> GetBalancesMultiCallAsync(ContractType contractType);
         Task<Dictionary<string, decimal>> GetWalletAddressBalanceAsync(string walletAddress);
         Task<decimal> GetWalletAddressSingleTokenBalanceAsync(string walletAddress,string tokenName);
         Task<Dictionary<string, Dictionary<string, decimal>>> GetWalletsBalancesAsync(
@@ -26,7 +27,7 @@ namespace CoinBank.Services._BlockChain
 
 
        
-        Task<BigInteger> GetNonceAsync(string address, string saleId);
+        Task<BigInteger> PreSaleOrderGetNonceAsync(string address, string saleId);
 
     }
 }

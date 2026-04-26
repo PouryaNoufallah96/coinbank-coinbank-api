@@ -31,7 +31,7 @@
 
 //        #region Validation Methods
 
-      
+
 
 //        private void ValidateDifferentTokens(CreateSwapUpdate update)
 //        {

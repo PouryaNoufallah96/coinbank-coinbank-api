@@ -1,6 +1,7 @@
 ﻿using CoinBank.Domain.Collections;
 using CoinBank.Domain.Repositories.Contracts;
 using CoinBank.Services._BlockChain;
+using CoinBank.Services._BlockChain.DTOs.Updates;
 using CoinBank.Services._Common.DTOs.Settings;
 using CoinBank.Services._Common.Services;
 using CoinBank.Services._PreSale.DTOs.Results;
@@ -52,7 +53,7 @@ namespace CoinBank.Services._PreSale
             };
 
 
-            var registerHash = await _blockChainService.ConfigurePresaleAsync(newPreSale);
+            var registerHash = await _blockChainService.PreSaleConfigureAsync(newPreSale);
 
             if (registerHash == null || registerHash.IsNullOrEmpty()) throw new BadRequestException("Error in submit on blockChain!");
 
@@ -286,7 +287,7 @@ namespace CoinBank.Services._PreSale
 
             var storageList = new List<PreSaleData>();
 
-            var allbalances = await _blockChainService.GetContractBalancesAsync();
+            var allbalances = await _blockChainService.GetContractBalancesAsync(ContractType.PreSale);
 
             foreach (var presale in presales)
             {
@@ -336,7 +337,7 @@ namespace CoinBank.Services._PreSale
 
         public async Task SyncPreSaleTokenBalanceAsync(string tokenName)
         {
-            var balance = await _blockChainService.GetContractSingleBalanceAsync(tokenName);
+            var balance = await _blockChainService.GetContractSingleBalanceAsync(tokenName,ContractType.PreSale);
             _preSaleStorage.UpdateContractBalance(tokenName, balance);
         }
 

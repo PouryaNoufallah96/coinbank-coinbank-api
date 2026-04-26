@@ -11,7 +11,9 @@ namespace CoinBank.Services._BlockChain.DTOs.Settings
         public string PublicAddress { get; set; }
         public long ChainId { get; set; }
         public int TransactionTimeoutSeconds { get; set; }
+        public string PreSaleContractAddress { get; set; }
 
+         
         public string DefaultGasLimit { get; set; }
         public string DefaultGasPriceGwei { get; set; }
         public string MinGasPriceGwei { get; set; }
