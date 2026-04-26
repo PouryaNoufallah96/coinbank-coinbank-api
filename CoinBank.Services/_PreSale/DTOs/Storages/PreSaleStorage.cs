@@ -25,7 +25,30 @@ namespace CoinBank.Services._PreSale.DTOs.Storages
             AddOrUpdate(
                 preSaleReference,
                 data,
-                (key, existing) => data 
+                (key, existing) =>
+                {
+                    
+                    existing.Name = data.Name;
+                    existing.Symbol = data.Symbol;
+                    existing.LogoUrl = data.LogoUrl;
+                    existing.Description = data.Description;
+                    existing.TotalSupply = data.TotalSupply;
+                    existing.MaxPerOrder = data.MaxPerOrder;
+                    existing.MinPerOrder = data.MinPerOrder;
+                    existing.TotalSupplied = data.TotalSupplied;
+                    existing.AvailableForEachOrder = data.AvailableForEachOrder;
+                    existing.Price = data.Price;
+                    existing.StartSellingAt = data.StartSellingAt;
+                    existing.EndSellingAt = data.EndSellingAt;
+                    existing.ReleaseSchedule = data.ReleaseSchedule;
+                    existing.State = data.State;
+                    existing.ModifiedMoment = data.ModifiedMoment;
+                    existing.LastUpdated = DateTime.UtcNow;
+
+                    // existing.ContractBalance
+
+                    return existing;
+                }
             );
 
             _hubContext.Clients.All.SendAsync("NotifyPreSale", this);
