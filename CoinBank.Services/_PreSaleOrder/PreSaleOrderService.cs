@@ -466,7 +466,7 @@ namespace CoinBank.Services._PreSaleOrder
                 Name = "CoinBankPresale",
                 Version = "1",
                 ChainId = _blockChainSettings.ChainId,
-                VerifyingContract = _blockChainSettings.ContractAddress
+                VerifyingContract = _blockChainSettings.PreSaleContractAddress
             };
 
 

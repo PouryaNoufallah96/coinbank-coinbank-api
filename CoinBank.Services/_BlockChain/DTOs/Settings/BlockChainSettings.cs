@@ -6,14 +6,14 @@ namespace CoinBank.Services._BlockChain.DTOs.Settings
     {
         public string RpcUrl { get; set; }
         public string RpcUrl2 { get; set; }
-        public string ContractAddress { get; set; }
         public string PrivateKey { get; set; }
         public string PublicAddress { get; set; }
         public long ChainId { get; set; }
         public int TransactionTimeoutSeconds { get; set; }
         public string PreSaleContractAddress { get; set; }
+        public string StakeContractAddress { get; set; }
+        public string SwapContractAddress { get; set; }
 
-         
         public string DefaultGasLimit { get; set; }
         public string DefaultGasPriceGwei { get; set; }
         public string MinGasPriceGwei { get; set; }
