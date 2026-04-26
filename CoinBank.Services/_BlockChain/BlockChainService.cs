@@ -387,9 +387,9 @@ namespace CoinBank.Services._BlockChain
                 case ContractType.PreSale:
                     return _settings.PreSaleContractAddress;
                 case ContractType.Swap:
-                    return _settings.Swapcon;
+                    return _settings.SwapContractAddress;
                 case ContractType.Stake:
-                    return _settings.PreSaleContractAddress;
+                    return _settings.StakeContractAddress;
                 default:
                     throw new BadRequestException("wrong contract type!");
             }
