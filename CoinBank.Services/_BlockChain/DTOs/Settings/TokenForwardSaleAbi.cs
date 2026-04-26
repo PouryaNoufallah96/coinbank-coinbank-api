@@ -3,7 +3,7 @@
 
     public static class TokenForwardSaleAbi
     {
-        public const string Value = @"
+        public const string PreSaleAbi = @"
        [
     {
         ""type"": ""function"",

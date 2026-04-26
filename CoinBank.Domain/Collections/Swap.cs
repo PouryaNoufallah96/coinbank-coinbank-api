@@ -25,12 +25,10 @@ namespace CoinBank.Domain.Collections
         public string DestinationAmountInWei { get; set; }
         public string DestinationWallet { get; set; }
 
+        public string FeeToken { get; set; }
         public decimal Fee { get; set; } 
         public string RegisterHash { get; set; }
-        public DateTime? RegisterMoment { get; set; } = null;
-
-        //public string Signature { get; set; }
-        //public DateTime SignatureExpire { get; set; }
+        public DateTime? RegisterMoment { get; set; } = null;  
 
         public SwapState State { get; set; } = SwapState.Pending;
         public List<SwapTransaction> Transactions { get; set; }

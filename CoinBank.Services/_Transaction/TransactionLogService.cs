@@ -154,6 +154,21 @@ namespace CoinBank.Services._Transaction
         }
 
 
+        public async Task<BigInteger> GetPreSaleOrderLastCheckedBlockNumberAsync() 
+        {
+            var lastBlock = await _transactionLogRepository
+             .AsQueryable()
+             .Where(h => h.EventType == BlockchainEventType.PreSaleOrderCreate)
+             .OrderByDescending(b => b)
+             .FirstOrDefaultAsync();
+            if (lastBlock == null)
+            {
+                return BigInteger.Zero;
+            }
+            return new BigInteger(lastBlock.BlockNumber);
+        }
+
+
         private string SerializeData<T>(T input)
         {
             object data = input switch

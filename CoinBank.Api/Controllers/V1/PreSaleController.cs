@@ -20,7 +20,7 @@ namespace CoinBank.Api.Controllers.V1
     {
 
         [HttpPost("[action]")]
-        [Authorize(Permissions.PreSaleManage)]
+        //[Authorize(Permissions.PreSaleManage)]
         [CustomRateLimit(maxAttemptsCount: 20)]
         [SwaggerOperation(Summary = "Create new pre-sale token", Tags = ["PreSale-Admin"])]
         public async Task<PreSaleResult> CreatePreSaleTokenAsync(CreatePreSaleTokenUpdate update)

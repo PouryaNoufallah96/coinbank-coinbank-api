@@ -1,5 +1,6 @@
 ﻿using CoinBank.Domain.Collections;
 using CoinBank.Services._BlockChain.DTOs.Settings;
+using CoinBank.Services._BlockChain.DTOs.Updates;
 using CoinBank.Services._Common.DTOs.Settings;
 using CoinBank.Services._MultiCallService;
 using CoinBank.Services._MultiCallService.DTOs;
@@ -20,7 +21,7 @@ namespace CoinBank.Services._BlockChain
 {
     public class BlockChainService : IBlockChainService, ISingletonDependency
     {
-        private const string ContractAbi = TokenForwardSaleAbi.Value;
+        private const string PreSaleContractAbi = TokenForwardSaleAbi.PreSaleAbi;
         private const string ERC20Abi = TokenForwardSaleAbi.ERC20Abi;
         private readonly BlockChainSettings _settings;
         private readonly ILogger<BlockChainService> _logger;
@@ -54,8 +55,7 @@ namespace CoinBank.Services._BlockChain
 
         #region PreSale Methods
 
-
-        public async Task<string> ClaimTokensByOperatorAsync(string presaleId, string orderId)
+        public async Task<string> PreSaleOrderClaimTokensByOperatorAsync(string presaleId, string orderId)
         {
             if (string.IsNullOrEmpty(presaleId))
                 throw new BadRequestException("PresaleId is required.");
@@ -65,7 +65,7 @@ namespace CoinBank.Services._BlockChain
 
             try
             {
-                var contract = _web3.Eth.GetContract(ContractAbi, _settings.ContractAddress);
+                var contract = _web3.Eth.GetContract(PreSaleContractAbi, _settings.PreSaleContractAddress);
                 var function = contract.GetFunction("claimTokensByOperator");
 
                 var presaleIdBytes = HexToByteArray32(presaleId);
@@ -82,8 +82,8 @@ namespace CoinBank.Services._BlockChain
                     value: new Nethereum.Hex.HexTypes.HexBigInteger(0),
                     functionInput: new object[]
                     {
-                presaleIdBytes,
-                orderIdBytes
+                        presaleIdBytes,
+                        orderIdBytes
                     }
                 );
 
@@ -118,8 +118,7 @@ namespace CoinBank.Services._BlockChain
             }
         }
 
-
-        public async Task<string> ConfigurePresaleAsync(PreSale preSale)
+        public async Task<string> PreSaleConfigureAsync(PreSale preSale)
         {
             if (preSale == null)
                 throw new BadRequestException("PreSale is null.");
@@ -135,7 +134,7 @@ namespace CoinBank.Services._BlockChain
 
             try
             {
-                var contract = _web3.Eth.GetContract(ContractAbi, _settings.ContractAddress);
+                var contract = _web3.Eth.GetContract(PreSaleContractAbi, _settings.PreSaleContractAddress);
                 var function = contract.GetFunction("configurePresale");
 
                 var saleIdBytes = HexToByteArray32(preSale.PreSaleReference);
@@ -204,7 +203,46 @@ namespace CoinBank.Services._BlockChain
             }
         }
 
+        public async Task<BigInteger> PreSaleOrderGetNonceAsync(string address, string saleId)
+        {
+            try
+            {
 
+                var insuranceContract = _web3.Eth.GetContract(
+                    PreSaleContractAbi,
+                   _settings.PreSaleContractAddress
+                );
+
+                var noncesFunction = insuranceContract.GetFunction("nonces");
+                var saleIdBytes32 = HexToByteArray32(saleId);
+
+                var nonce = await noncesFunction.CallAsync<BigInteger>(
+                    address,
+                    saleIdBytes32
+                );
+
+                _logger.LogInformation(
+                    "Nonce for address {address} and saleId {saleId}: {Nonce}",
+                    address,
+                    saleId,
+                    nonce
+                );
+
+                return nonce;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(
+                    ex,
+                    "Error getting nonce for address {UserAddress} and saleId {saleId}",
+                    address,
+                    saleId
+                );
+
+                throw;
+            }
+        }
+        
         private object[] MapVestingData(List<PreSaleReleaseStep> releaseSchedule)
         {
             if (releaseSchedule == null || !releaseSchedule.Any())
@@ -241,7 +279,6 @@ namespace CoinBank.Services._BlockChain
             return result;
         }
 
-
         DateTime NormalizeToUtc(DateTime dt)
         {
             if (dt.Kind == DateTimeKind.Utc)
@@ -268,10 +305,10 @@ namespace CoinBank.Services._BlockChain
 
 
         #region Balance Methods
-        public async Task<Dictionary<string, decimal>> GetContractBalancesAsync()
+        public async Task<Dictionary<string, decimal>> GetContractBalancesAsync(ContractType type)
         {
             var balances = new Dictionary<string, decimal>();
-
+            var contractAddress = GetContractAddressByType(type);
             try
             {
                 foreach (var token in _availableTokenData)
@@ -281,7 +318,7 @@ namespace CoinBank.Services._BlockChain
                         var erc20 = _web3.Eth.GetContract(ERC20Abi, token.Address);
                         var balanceOf = erc20.GetFunction("balanceOf");
 
-                        var balance = await balanceOf.CallAsync<BigInteger>(_settings.ContractAddress);
+                        var balance = await balanceOf.CallAsync<BigInteger>(contractAddress);
                         balances[token.Name] = UnitConversion.Convert.FromWei(balance, token.PriceDecimalPlaces);
                     }
                     catch (Exception ex)
@@ -302,15 +339,17 @@ namespace CoinBank.Services._BlockChain
             return balances;
         }
 
-        public async Task<decimal> GetContractSingleBalanceAsync(string tokenName)
+        public async Task<decimal> GetContractSingleBalanceAsync(string tokenName, ContractType contractType)
         {
             var tokenData = ValidateToken(tokenName);
+            var contractAddress = GetContractAddressByType(contractType);
+
             try
             {
                 var erc20 = _web3.Eth.GetContract(ERC20Abi, tokenData.Address);
                 var balanceOf = erc20.GetFunction("balanceOf");
 
-                var balance = await balanceOf.CallAsync<BigInteger>(_settings.ContractAddress);
+                var balance = await balanceOf.CallAsync<BigInteger>(contractAddress);
                 var tokenBalance = UnitConversion.Convert.FromWei(balance, tokenData.PriceDecimalPlaces);
                 return tokenBalance;
             }
@@ -321,14 +360,16 @@ namespace CoinBank.Services._BlockChain
             }
         }
 
-        public async Task<decimal> GetContractRZUSDBalanceAsync()
+        public async Task<decimal> GetContractRZUSDBalanceAsync(ContractType contractType)
         {
+            var contractAddress = GetContractAddressByType(contractType);
+
             try
             {
                 var erc20 = _web3.Eth.GetContract(ERC20Abi, "0xC4A1cc5cA8955a4650BDC109bddf110E33a1e344");
                 var balanceOf = erc20.GetFunction("balanceOf");
 
-                var balance = await balanceOf.CallAsync<BigInteger>(_settings.ContractAddress);
+                var balance = await balanceOf.CallAsync<BigInteger>(contractAddress);
                 var tokenBalance = UnitConversion.Convert.FromWei(balance, 18);
                 return tokenBalance;
             }
@@ -339,10 +380,26 @@ namespace CoinBank.Services._BlockChain
             }
         }
 
-        public async Task<Dictionary<string, decimal>> GetBalancesMultiCallAsync()
+        private string GetContractAddressByType(ContractType contractType)
+        {
+            switch (contractType)
+            {
+                case ContractType.PreSale:
+                    return _settings.PreSaleContractAddress;
+                case ContractType.Swap:
+                    return _settings.PreSaleContractAddress;
+                case ContractType.Stake:
+                    return _settings.PreSaleContractAddress;
+                default:
+                    throw new BadRequestException("wrong contract type!");
+            }
+        }
+
+        public async Task<Dictionary<string, decimal>> GetBalancesMultiCallAsync(ContractType contractType)
         {
             var balances = new Dictionary<string, decimal>();
-            var contractAddress = _settings.ContractAddress;
+            var contractAddress =  GetContractAddressByType(contractType);
+
             var tokens = _availableTokenData;
 
             if (tokens == null || !tokens.Any())
@@ -452,7 +509,6 @@ namespace CoinBank.Services._BlockChain
 
             return balances;
         }
-
 
         public async Task<decimal> GetWalletAddressSingleTokenBalanceAsync(string walletAddress, string tokenName)
         {
@@ -608,49 +664,11 @@ namespace CoinBank.Services._BlockChain
             return (decimal)weiAmount / factor;
         }
 
-
         #endregion
 
 
 
-        public async Task<BigInteger> GetNonceAsync(string address, string saleId)
-        {
-            try
-            {
-                var insuranceContract = _web3.Eth.GetContract(
-                    ContractAbi,
-                    _settings.ContractAddress
-                );
-
-                var noncesFunction = insuranceContract.GetFunction("nonces");
-                var saleIdBytes32 = HexToByteArray32(saleId);
-
-                var nonce = await noncesFunction.CallAsync<BigInteger>(
-                    address,
-                    saleIdBytes32
-                );
-
-                _logger.LogInformation(
-                    "Nonce for address {address} and saleId {saleId}: {Nonce}",
-                    address,
-                    saleId,
-                    nonce
-                );
-
-                return nonce;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(
-                    ex,
-                    "Error getting nonce for address {UserAddress} and saleId {saleId}",
-                    address,
-                    saleId
-                );
-
-                throw;
-            }
-        }
+       
 
         private AvailableTokenData ValidateToken(string tokenName)
         {

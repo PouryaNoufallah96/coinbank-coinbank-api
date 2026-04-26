@@ -29,13 +29,13 @@ namespace CoinBank.Services._BlockChainWebSocket
         private readonly IPreSaleService _preSaleService;
         private readonly ILogger<BlockChainEventBackgroundService> _logger;
         private readonly BlockchainWebSocketSetting _settings;
-        private BigInteger _lastProcessedBlock = 0;
+        private BigInteger _preSaleLastProcessedBlock = 0;
         private int _reconnectAttempts = 0;
         private DateTime _lastEventReceived = DateTime.UtcNow;
         private readonly SemaphoreSlim _reconnectLock = new(1, 1);
         private bool _isCleaningUp = false;
         private readonly SemaphoreSlim _cleanupLock = new(1, 1);
-        private IDisposable _contractEventsSubscription;
+        private IDisposable _preSaleContractEventsSubscription;
         private IDisposable _incomingTransferSubscription;
 
         private bool _useSecondaryWsUrl = false;
@@ -66,8 +66,8 @@ namespace CoinBank.Services._BlockChainWebSocket
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
             _logger.LogInformation("Blockchain Event Service starting...");
-            _lastProcessedBlock = await GetLastProcessedBlock(stoppingToken);
-            _logger.LogInformation($"starting block is : {_lastProcessedBlock}");
+            _preSaleLastProcessedBlock = await GetPreSaleOrderLastProcessedBlock(stoppingToken);
+            _logger.LogInformation($"PreSale starting block is : {_preSaleLastProcessedBlock}");
 
             while (!stoppingToken.IsCancellationRequested)
             {
@@ -170,7 +170,6 @@ namespace CoinBank.Services._BlockChainWebSocket
         {
             _logger.LogInformation("...........ConnectAndSubscribe touched............");
 
-
             await CleanupConnection();
 
             var currestWsUrl = GetCurrentWsUrl();
@@ -182,10 +181,10 @@ namespace CoinBank.Services._BlockChainWebSocket
             {
                 await _webSocketClient.StartAsync();
 
-
-                await SubscribeToContractEventsAsync(cancellationToken);
+                await SubscribeToPreSaleContractEventsAsync(cancellationToken);
 
                 await SubscribeToIncomingTransfersAsync(cancellationToken);
+
                 _logger.LogInformation("ContractEvents subscription is active.");
             }
             catch (Exception ex)
@@ -207,9 +206,9 @@ namespace CoinBank.Services._BlockChainWebSocket
             {
                 _logger.LogInformation("Starting cleanup...");
 
-                _contractEventsSubscription?.Dispose();
+                _preSaleContractEventsSubscription?.Dispose();
                 _incomingTransferSubscription?.Dispose();
-                _contractEventsSubscription = null;
+                _preSaleContractEventsSubscription = null;
                 _incomingTransferSubscription = null;
 
                 if (_webSocketClient != null)
@@ -264,16 +263,18 @@ namespace CoinBank.Services._BlockChainWebSocket
         }
 
 
-        private async Task SubscribeToContractEventsAsync(CancellationToken cancellationToken)
+
+        #region PreSaleSide
+        private async Task SubscribeToPreSaleContractEventsAsync(CancellationToken cancellationToken)
         {
             var subscription = new EthLogsObservableSubscription(_webSocketClient);
 
             var safeObservable = subscription.GetSubscriptionDataResponsesAsObservable()
-           .Where(log => log.Address.IsTheSameAddress(_settings.ContractAddress))
+           .Where(log => log.Address.IsTheSameAddress(_settings.PreSaleContractAddress))
            .Select(log => Observable.FromAsync(() => ProcessContractEventLogAsync(log, cancellationToken)))
            .Concat();
 
-            _contractEventsSubscription = safeObservable.Subscribe(
+            _preSaleContractEventsSubscription = safeObservable.Subscribe(
                 _ => { },
                 async ex =>
                 {
@@ -286,35 +287,32 @@ namespace CoinBank.Services._BlockChainWebSocket
 
             var filter = new NewFilterInput
             {
-                Address = new[] { _settings.ContractAddress },
-                FromBlock = new BlockParameter(await GetLastProcessedBlock(cancellationToken))
+                Address = new[] { _settings.PreSaleContractAddress },
+                FromBlock = new BlockParameter(await GetPreSaleOrderLastProcessedBlock(cancellationToken))
             };
 
             await subscription.SubscribeAsync(filter);
         }
 
-        private async Task<HexBigInteger> GetLastProcessedBlock(CancellationToken cancellationToken)
+        private async Task<HexBigInteger> GetPreSaleOrderLastProcessedBlock(CancellationToken cancellationToken)
         {
-
             try
             {
+                lock (_blockLock)
+                {
+                    if (_preSaleLastProcessedBlock > 0)
+                        return _preSaleLastProcessedBlock.ToHexBigInteger();
+                }
 
+                var lastDbBlock = await _transactionLogService.GetPreSaleOrderLastCheckedBlockNumberAsync();
 
                 lock (_blockLock)
                 {
-                    if (_lastProcessedBlock > 0)
-                        return _lastProcessedBlock.ToHexBigInteger();
+                    _preSaleLastProcessedBlock = lastDbBlock;
                 }
 
-                var lastDbBlock = await _transactionLogService.GetLastCheckedBlockNumberAsync();
-
-                lock (_blockLock)
-                {
-                    _lastProcessedBlock = lastDbBlock;
-                }
-
-                if (_lastProcessedBlock > 0)
-                    return _lastProcessedBlock.ToHexBigInteger();
+                if (_preSaleLastProcessedBlock > 0)
+                    return _preSaleLastProcessedBlock.ToHexBigInteger();
 
                 try
                 {
@@ -323,7 +321,7 @@ namespace CoinBank.Services._BlockChainWebSocket
                     var latestBlockNumber = await _web3Client.Eth.Blocks.GetBlockNumber.SendRequestAsync();
                     lock (_blockLock)
                     {
-                        _lastProcessedBlock = latestBlockNumber;
+                        _preSaleLastProcessedBlock = latestBlockNumber;
                         return latestBlockNumber;
                     }
 
@@ -341,7 +339,6 @@ namespace CoinBank.Services._BlockChainWebSocket
                 throw;
             }
         }
-
 
         private async Task ProcessContractEventLogAsync(FilterLog log, CancellationToken cancellationToken)
         {
@@ -401,11 +398,9 @@ namespace CoinBank.Services._BlockChainWebSocket
 
             lock (_blockLock)
             {
-                _lastProcessedBlock = BigInteger.Max(_lastProcessedBlock, log.BlockNumber.Value + 1);
+                _preSaleLastProcessedBlock = BigInteger.Max(_preSaleLastProcessedBlock, log.BlockNumber.Value + 1);
             }
         }
-
-
 
         private async Task CreatePreSaleOrderCreateLogAsync(FilterLog log, EventLog<PurchasedEventDTO> purchasedEvent)
         {
@@ -440,63 +435,14 @@ namespace CoinBank.Services._BlockChainWebSocket
 
             lock (_blockLock)
             {
-                _lastProcessedBlock = BigInteger.Max(_lastProcessedBlock, log.BlockNumber.Value + 1);
+                _preSaleLastProcessedBlock = BigInteger.Max(_preSaleLastProcessedBlock, log.BlockNumber.Value + 1);
             }
         }
 
+        #endregion
 
-        //private async Task SubscribeToIncomingTransfersAsync(CancellationToken cancellationToken) 
-        //{
-        //    var tokenAddresses = _availableTokensSettings
-        //        .Select(t => t.Address.ToLower())
-        //        .ToList();
-
-        //    var subscription = new EthLogsObservableSubscription(_webSocketClient);
-
-        //    _incomingTransferSubscription = subscription.GetSubscriptionDataResponsesAsObservable()
-        //        .Subscribe(
-        //            async log =>
-        //            {
-        //                try
-        //                {
-        //                    if (tokenAddresses.Contains(log.Address.ToLower()))
-        //                    {
-        //                        var transferEvent = log.DecodeEvent<TransferEventDTO>();
-        //                        if (transferEvent != null && transferEvent.Event.To.IsTheSameAddress(_settings.ContractAddress))
-        //                        {
-        //                            var token = _availableTokensSettings.FirstOrDefault(t => t.Address.IsTheSameAddress(log.Address));
-        //                            var amount = Web3.Convert.FromWei(transferEvent.Event.Value);
-        //                            _logger.LogInformation("Incoming {Token} Transfer: {Amount} from {From}", token.Name, amount, transferEvent.Event.From);
-
-        //                            await _inventoryService.SyncInventoryQuantityAsync(token.Name.ToUpper());
-        //                        }
-        //                    }
-        //                }
-        //                catch (Exception ex)
-        //                {
-        //                    _logger.LogError($"Error processing incoming token transfer {ex.Message}");
-        //                }
-        //            },
-        //            async ex =>
-        //            {
-        //                _logger.LogError(ex, "Error in incoming transfer subscription. Reconnecting...");
-        //                _ = Task.Run(async () => await TryConnectWithRetryAsync(cancellationToken));
-        //            },
-        //            () =>
-        //            {
-        //                _logger.LogWarning("Incoming transfer subscription completed unexpectedly. Reconnecting...");
-        //                _ = Task.Run(async () => await TryConnectWithRetryAsync(cancellationToken));
-        //            }
-        //        );
-
-        //    var filter = new NewFilterInput
-        //    {
-        //        Address = tokenAddresses.Concat(new[] { _settings.ContractAddress }).ToArray()
-        //    };
-
-        //    await subscription.SubscribeAsync(filter);
-        //}
-
+        
+        #region TrasferSide
         private async Task SubscribeToIncomingTransfersAsync(CancellationToken cancellationToken)
         {
             var tokenAddresses = _availableTokensSettings
@@ -509,6 +455,14 @@ namespace CoinBank.Services._BlockChainWebSocket
                 .Where(log => tokenAddresses.Contains(log.Address.ToLower()))
                 .Select(log => Observable.FromAsync(() => ProcessIncomingTransferLogAsync(log)))
                 .Concat();
+
+            var contractAddresses = new List<string>
+            {
+                _settings.SwapContractAddress,
+                _settings.PreSaleContractAddress,
+                _settings.StakeContractAddress
+            };
+
 
             _incomingTransferSubscription = safeObservable.Subscribe(
                 _ => { },
@@ -525,7 +479,7 @@ namespace CoinBank.Services._BlockChainWebSocket
 
             var filter = new NewFilterInput
             {
-                Address = tokenAddresses.Concat(new[] { _settings.ContractAddress }).ToArray()
+                Address = tokenAddresses.Concat(contractAddresses).ToArray()
             };
 
             await subscription.SubscribeAsync(filter);
@@ -536,19 +490,95 @@ namespace CoinBank.Services._BlockChainWebSocket
             try
             {
                 var transferEvent = log.DecodeEvent<TransferEventDTO>();
-                if (transferEvent != null && transferEvent.Event.To.IsTheSameAddress(_settings.ContractAddress))
+                if (transferEvent == null) return;
+
+                var to = transferEvent.Event.To;
+                var token = _availableTokensSettings.FirstOrDefault(t => t.Address.IsTheSameAddress(log.Address));
+
+                if (token == null)
                 {
-                    var token = _availableTokensSettings.FirstOrDefault(t => t.Address.IsTheSameAddress(log.Address));
-                    var amount = Web3.Convert.FromWei(transferEvent.Event.Value);
+                    _logger.LogWarning("Token not found for address {Address}", log.Address);
+                    return;
+                }
 
-                    _logger.LogInformation("Incoming {Token} Transfer: {Amount} from {From}", token.Name, amount, transferEvent.Event.From);
+                var amount = Web3.Convert.FromWei(transferEvent.Event.Value);
 
+                if (to.IsTheSameAddress(_settings.PreSaleContractAddress))
+                {
+
+                    _logger.LogInformation("PreSale Side {Token} Transfer: {Amount} from {From}", token.Name, amount, transferEvent.Event.From);
                     await _preSaleService.SyncPreSaleTokenBalanceAsync(token.Name.ToUpper());
+
+                }
+                else if (to.IsTheSameAddress(_settings.SwapContractAddress))
+                {
+                    _logger.LogInformation("Swap Side: {Token} {Amount} from {From}", token.Name, amount, transferEvent.Event.From);
+                    //TODO : complete
+
+                }
+                else if (to.IsTheSameAddress(_settings.StakeContractAddress))
+                {
+                    _logger.LogInformation("Stake Side : {Token} {Amount} from {From}", token.Name, amount, transferEvent.Event.From);
+
+                    //TODO : complete
                 }
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error processing incoming token transfer");
+            }
+        }
+
+        #endregion
+
+
+
+        private async Task<HexBigInteger> GetLastProcessedBlock(CancellationToken cancellationToken)
+        {
+
+            try
+            {
+
+
+                lock (_blockLock)
+                {
+                    if (_preSaleLastProcessedBlock > 0)
+                        return _preSaleLastProcessedBlock.ToHexBigInteger();
+                }
+
+                var lastDbBlock = await _transactionLogService.GetLastCheckedBlockNumberAsync();
+
+                lock (_blockLock)
+                {
+                    _preSaleLastProcessedBlock = lastDbBlock;
+                }
+
+                if (_preSaleLastProcessedBlock > 0)
+                    return _preSaleLastProcessedBlock.ToHexBigInteger();
+
+                try
+                {
+                    var _web3Client = new Web3(blockChainSettings.RpcUrl);
+
+                    var latestBlockNumber = await _web3Client.Eth.Blocks.GetBlockNumber.SendRequestAsync();
+                    lock (_blockLock)
+                    {
+                        _preSaleLastProcessedBlock = latestBlockNumber;
+                        return latestBlockNumber;
+                    }
+
+                }
+                catch (Exception e)
+                {
+                    _logger.LogError(e.Message);
+                    throw;
+                }
+
+            }
+            catch (Exception e)
+            {
+                SentrySdk.CaptureException(e);
+                throw;
             }
         }
 
@@ -579,11 +609,12 @@ namespace CoinBank.Services._BlockChainWebSocket
                 await base.StopAsync(cancellationToken);
             }
         }
+       
         public void Dispose()
         {
             if (!_isDisposed)
             {
-                _contractEventsSubscription?.Dispose();
+                _preSaleContractEventsSubscription?.Dispose();
                 _webSocketClient?.Dispose();
                 _reconnectLock?.Dispose();
                 _cleanupLock?.Dispose();

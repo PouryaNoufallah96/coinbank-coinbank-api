@@ -2,6 +2,7 @@
 using CoinBank.Domain.Repositories.Contracts;
 using CoinBank.Services._BlockChain;
 using CoinBank.Services._BlockChain.DTOs.Settings;
+using CoinBank.Services._BlockChain.DTOs.Updates;
 using CoinBank.Services._Common.DTOs.Settings;
 using CoinBank.Services._Common.Services;
 using CoinBank.Services._PreSale;
@@ -457,7 +458,7 @@ namespace CoinBank.Services._PreSaleOrder
                 throw new Exception("Invalid PaidToken");
 
             var paymentTokenAddress = tokenRegistry[paymentToken];
-            var nonce = await _blockChainService.GetNonceAsync(walletAddress, preSaleRef);
+            var nonce = await _blockChainService.PreSaleOrderGetNonceAsync(walletAddress, preSaleRef);
             var deadline = new DateTimeOffset(signatureExpire).ToUnixTimeSeconds();
 
             var domain = new Nethereum.ABI.EIP712.Domain
@@ -576,7 +577,7 @@ namespace CoinBank.Services._PreSaleOrder
 
             if (contractBalance < amount)
             {
-                contractBalance = await _blockChainService.GetContractSingleBalanceAsync(symbol);
+                contractBalance = await _blockChainService.GetContractSingleBalanceAsync(symbol,ContractType.PreSale);
 
                 _preSaleStorage.UpdateContractBalance(symbol, contractBalance);
 
@@ -727,7 +728,7 @@ namespace CoinBank.Services._PreSaleOrder
                     return null;
                 }
 
-                var txHash = await _blockChainService.ClaimTokensByOperatorAsync(
+                var txHash = await _blockChainService.PreSaleOrderClaimTokensByOperatorAsync(
                     order.PreSaleReference,
                     order.PreSaleOrderReference
                 );

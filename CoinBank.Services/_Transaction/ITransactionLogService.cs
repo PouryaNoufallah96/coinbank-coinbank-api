@@ -8,5 +8,6 @@ namespace CoinBank.Services._Transaction
         Task CreatePreSaleOrderCreateLogAsync(PreSaleOrderCreateLog input);
         Task CreatePreSaleReleaseClaimedLogAsync(PreSaleReleaseClaimedLog input);
         Task<BigInteger> GetLastCheckedBlockNumberAsync();
+        Task<BigInteger> GetPreSaleOrderLastCheckedBlockNumberAsync();
     }
 }
