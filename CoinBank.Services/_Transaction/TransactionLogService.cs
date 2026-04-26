@@ -113,7 +113,7 @@ namespace CoinBank.Services._Transaction
 
                 await _transactionLogRepository.InsertOneAsync(newLog);
 
-                await _preSaleOrderService.UpdatePreSaleReleaseStepForAddTransactionAsync(input.OrderId, input.Hash, input.AmountClaimed);
+                //await _preSaleOrderService.UpdatePreSaleReleaseStepForAddTransactionAsync(input.OrderId, input.Hash, input.AmountClaimed);
 
                 try
                 {

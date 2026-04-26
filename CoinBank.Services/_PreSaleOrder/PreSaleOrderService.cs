@@ -747,6 +747,9 @@ namespace CoinBank.Services._PreSaleOrder
 
                 step.RegisterHash = txHash;
                 step.RegisterMoment = now;
+                step.TransactionMoment = now;
+                step.TxHash = txHash;
+                step.CliamedAmount = (order.ReceivingTokenAmount * step.Percentage) / 100;
 
                 if (order.ReleaseSchedule.All(x => x.RegisterMoment != null))
                 {
