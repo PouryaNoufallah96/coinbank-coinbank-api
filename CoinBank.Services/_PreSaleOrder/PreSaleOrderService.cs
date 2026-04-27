@@ -10,6 +10,8 @@ using CoinBank.Services._PreSale.DTOs.Storages;
 using CoinBank.Services._PreSaleOrder.DTOs.Results;
 using CoinBank.Services._PreSaleOrder.DTOs.Updates;
 using CoinBank.Services._PreSaleRelease;
+using CoinBank.Services._Transaction._Hub;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.CodeAnalysis;
 using Microsoft.Extensions.Logging;
 using MongoDB.Driver;
@@ -31,6 +33,7 @@ namespace CoinBank.Services._PreSaleOrder
         BlockChainSettings _blockChainSettings,
         ILogger<PreSaleOrderService> _logger,
         PreSaleStorage _preSaleStorage,
+        IHubContext<WalletNotifyHub> _hubContext,
         IBlockChainService _blockChainService) : IPreSaleOrderService, IScopedDependency
     {
 
@@ -747,8 +750,6 @@ namespace CoinBank.Services._PreSaleOrder
 
                 step.RegisterHash = txHash;
                 step.RegisterMoment = now;
-                //step.TransactionMoment = now;
-                //step.TxHash = txHash;
                 step.CliamedAmount = (order.ReceivingTokenAmount * step.Percentage) / 100;
 
                 if (order.ReleaseSchedule.All(x => x.RegisterMoment != null))
@@ -763,6 +764,19 @@ namespace CoinBank.Services._PreSaleOrder
                     order.PreSaleOrderReference,
                     txHash
                 );
+
+                try
+                {
+                    var shortHash = txHash[..10];
+                    await _hubContext.Clients.Group(order.WalletAddress)
+                        .SendAsync("PreSaleMessage", $"Your claim  {shortHash}... was successful.");
+                }
+                catch (Exception)
+                {
+                    _logger.LogError("Failed to send PreSaleReleaseClaimed notification for txhash {txhash}", txHash);
+                }
+
+             
 
                 return txHash;
             }
