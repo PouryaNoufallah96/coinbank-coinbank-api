@@ -350,12 +350,12 @@ namespace CoinBank.Services._BlockChainWebSocket
                     return;
                 }
 
-                var preSaleReleaseClaimedEvent = log.DecodeEvent<ClaimedEventDTO>();
-                if (preSaleReleaseClaimedEvent != null)
-                {
-                    await CreatePreSaleOrderReleaseClaimedLogAsync(log, preSaleReleaseClaimedEvent);
-                    return;
-                }
+                //var preSaleReleaseClaimedEvent = log.DecodeEvent<ClaimedEventDTO>();
+                //if (preSaleReleaseClaimedEvent != null)
+                //{
+                //    await CreatePreSaleOrderReleaseClaimedLogAsync(log, preSaleReleaseClaimedEvent);
+                //    return;
+                //}
 
             }
             catch (Exception ex)
