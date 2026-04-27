@@ -20,6 +20,6 @@ namespace CoinBank.Services._PreSaleOrder
         //internal
         Task RemoveNotRegisteredPreSaleOrderAsync();
         Task ProcessReleaseOrderAsync();
-        Task UpdatePreSaleReleaseStepForAddTransactionAsync(string preSaleOrderRef, string txHash, string claimedAmount);
+        //Task UpdatePreSaleReleaseStepForAddTransactionAsync(string preSaleOrderRef, string txHash, string claimedAmount);
     }
 }

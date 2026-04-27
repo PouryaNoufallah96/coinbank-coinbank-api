@@ -364,42 +364,42 @@ namespace CoinBank.Services._BlockChainWebSocket
             }
         }
 
-        private async Task CreatePreSaleOrderReleaseClaimedLogAsync(FilterLog log, EventLog<ClaimedEventDTO> claimedEvent)
-        {
-            var saleId = ByteArray32ToHex(claimedEvent.Event.SaleId);
-            var orderId = ByteArray32ToHex(claimedEvent.Event.OrderId);
+        //private async Task CreatePreSaleOrderReleaseClaimedLogAsync(FilterLog log, EventLog<ClaimedEventDTO> claimedEvent)
+        //{
+        //    var saleId = ByteArray32ToHex(claimedEvent.Event.SaleId);
+        //    var orderId = ByteArray32ToHex(claimedEvent.Event.OrderId);
 
-            _logger.LogInformation(
-                "****************************** Claimed: SaleId: {SaleId}, OrderId: {OrderId}, Buyer: {Buyer}, Amount: {Amount}",
-                saleId,
-                orderId,
-                claimedEvent.Event.Buyer,
-                claimedEvent.Event.AmountClaimed
-            );
+        //    _logger.LogInformation(
+        //        "****************************** Claimed: SaleId: {SaleId}, OrderId: {OrderId}, Buyer: {Buyer}, Amount: {Amount}",
+        //        saleId,
+        //        orderId,
+        //        claimedEvent.Event.Buyer,
+        //        claimedEvent.Event.AmountClaimed
+        //    );
 
-            SentrySdk.CaptureMessage(
-                $"****************************** Claimed: SaleId: {saleId}, OrderId: {orderId}, Buyer: {claimedEvent.Event.Buyer}, Amount: {claimedEvent.Event.AmountClaimed}"
-            );
+        //    SentrySdk.CaptureMessage(
+        //        $"****************************** Claimed: SaleId: {saleId}, OrderId: {orderId}, Buyer: {claimedEvent.Event.Buyer}, Amount: {claimedEvent.Event.AmountClaimed}"
+        //    );
 
-            await _transactionLogService.CreatePreSaleReleaseClaimedLogAsync(new PreSaleReleaseClaimedLog
-            {
-                Hash = log.TransactionHash,
-                Address = log.Address,
-                BlockNumber = log.BlockNumber.Value,
+        //    await _transactionLogService.CreatePreSaleReleaseClaimedLogAsync(new PreSaleReleaseClaimedLog
+        //    {
+        //        Hash = log.TransactionHash,
+        //        Address = log.Address,
+        //        BlockNumber = log.BlockNumber.Value,
 
-                Buyer = claimedEvent.Event.Buyer,
-                SaleId = saleId,
-                OrderId = orderId,
-                AmountClaimed = claimedEvent.Event.AmountClaimed.ToString(),
+        //        Buyer = claimedEvent.Event.Buyer,
+        //        SaleId = saleId,
+        //        OrderId = orderId,
+        //        AmountClaimed = claimedEvent.Event.AmountClaimed.ToString(),
 
-                EventType = BlockchainEventType.PreSaleReleaseClaimed
-            });
+        //        EventType = BlockchainEventType.PreSaleReleaseClaimed
+        //    });
 
-            lock (_blockLock)
-            {
-                _preSaleLastProcessedBlock = BigInteger.Max(_preSaleLastProcessedBlock, log.BlockNumber.Value + 1);
-            }
-        }
+        //    lock (_blockLock)
+        //    {
+        //        _preSaleLastProcessedBlock = BigInteger.Max(_preSaleLastProcessedBlock, log.BlockNumber.Value + 1);
+        //    }
+        //}
 
         private async Task CreatePreSaleOrderCreateLogAsync(FilterLog log, EventLog<PurchasedEventDTO> purchasedEvent)
         {
