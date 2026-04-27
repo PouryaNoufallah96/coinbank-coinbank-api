@@ -274,7 +274,7 @@ namespace CoinBank.Services._PreSaleOrder
 
 
 
-            decimal totalReleased = order.ReleaseSchedule.Where(q => q.TxHash != null)
+            decimal totalReleased = order.ReleaseSchedule.Where(q => q.RegisterHash != null)
                 .Sum(x => x.CliamedAmount ?? 0);
 
             decimal remainForRelease = order.ReceivingTokenAmount - totalReleased;
@@ -401,9 +401,9 @@ namespace CoinBank.Services._PreSaleOrder
             var token = ValidateToken(order.Symbol);
             var convertedAmount = _blockChainService.ConvertFromWei(bigAmount, token.PriceDecimalPlaces);
 
-            step.TxHash = txHash;
+            //step.TxHash = txHash;
+            //step.TransactionMoment = DateTime.UtcNow;
             step.CliamedAmount = convertedAmount;
-            step.TransactionMoment = DateTime.UtcNow;
 
             await _preSaleOrderRepository.ReplaceOneAsync(order);
         }
@@ -747,8 +747,8 @@ namespace CoinBank.Services._PreSaleOrder
 
                 step.RegisterHash = txHash;
                 step.RegisterMoment = now;
-                step.TransactionMoment = now;
-                step.TxHash = txHash;
+                //step.TransactionMoment = now;
+                //step.TxHash = txHash;
                 step.CliamedAmount = (order.ReceivingTokenAmount * step.Percentage) / 100;
 
                 if (order.ReleaseSchedule.All(x => x.RegisterMoment != null))
