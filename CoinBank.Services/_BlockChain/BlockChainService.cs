@@ -23,6 +23,8 @@ namespace CoinBank.Services._BlockChain
     {
         private const string PreSaleContractAbi = TokenForwardSaleAbi.PreSaleAbi;
         private const string ERC20Abi = TokenForwardSaleAbi.ERC20Abi;
+        private const string SwapAbi = TokenForwardSaleAbi.SwapAbi;
+
         private readonly BlockChainSettings _settings;
         private readonly ILogger<BlockChainService> _logger;
         private readonly IMultiCallService _multicallService;
@@ -30,6 +32,7 @@ namespace CoinBank.Services._BlockChain
         private readonly Web3 _web3;
         private readonly Account _account;
         private readonly Contract _contract;
+
 
         public BlockChainService(BlockChainSettings settings,
             ILogger<BlockChainService> logger,
@@ -242,7 +245,7 @@ namespace CoinBank.Services._BlockChain
                 throw;
             }
         }
-        
+
         private object[] MapVestingData(List<PreSaleReleaseStep> releaseSchedule)
         {
             if (releaseSchedule == null || !releaseSchedule.Any())
@@ -294,13 +297,167 @@ namespace CoinBank.Services._BlockChain
 
 
 
+        #region Swap Methods
 
+        public async Task<BigInteger> SwapGetEstimatedFeeAsync(GetSwapEstimatedFeeUpdate update)
+        {
+            if (update == null)
+                throw new BadRequestException("Update is required.");
 
+            if (update.SourceAmoutInWei <= 0)
+                throw new BadRequestException("Amount must be greater than zero.");
 
+            if (string.Equals(update.SourceNetwork, update.DestinationNetwork, StringComparison.OrdinalIgnoreCase))
+            {
+                _logger.LogInformation(
+                    "EstimateFee skipped (same network). Network: {Network}",
+                    update.SourceNetwork
+                );
 
+                return BigInteger.Zero;
+            }
 
+            try
+            {
+                var contractAddress = GetSwapContractAddress(update.SourceNetwork);
 
+                var contract = _web3.Eth.GetContract(SwapAbi, contractAddress);
+                var function = contract.GetFunction("estimateFee");
 
+                var swapIdBytes = HexToByteArray32(update.SwapReference);
+
+                var param = new object[]
+                {
+                    swapIdBytes,
+                    MapNetworkToEid(update.DestinationNetwork),
+                    update.SourceTokenAddress,
+                    update.DestinationTokenAddress,
+                    update.SourceAmoutInWei,
+                    BigInteger.Zero,
+                    update.DestinationWallet
+                };
+
+                var options = BuildLzOptions();
+
+                var result = await function.CallAsync<BigInteger>(
+                    param,
+                    options
+                );
+
+                _logger.LogInformation(
+                    "EstimateFee | SrcNet: {Src} | DstNet: {Dst} | Amount: {Amount} | Fee: {Fee}",
+                    update.SourceNetwork,
+                    update.DestinationNetwork,
+                    update.SourceAmoutInWei,
+                    result
+                );
+
+                if (result < 0)
+                {
+                    throw new BadRequestException("Invalid fee returned from contract.");
+                }
+
+                return result;
+
+            }
+            catch (SmartContractRevertException revertEx)
+            {
+                _logger.LogError(
+                    revertEx,
+                    "Contract revert in estimateFee: {Message}",
+                    revertEx.Message
+                );
+
+                throw;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error in SwapGetEstimatedFeeAsync");
+                throw;
+            }
+        }
+
+        public async Task<BigInteger> SwapGetOutputAmountAsync(SwapGetOutputAmount update)
+        {
+            if (update == null)
+                throw new BadRequestException("Update is required.");
+
+            if (update.SourceAmountInWei <= 0)
+                throw new BadRequestException("SourceAmountInWei must be greater than zero.");
+
+            try
+            {
+                var contract = _web3.Eth.GetContract(
+                    SwapAbi,
+                    _settings.BEP20SwapContractAddress
+                );
+
+                var function = contract.GetFunction("getOutputAmount");
+
+                var result = await function.CallAsync<BigInteger>(
+                    update.SourceTokenAddress,
+                    update.SourceAmountInWei,
+                    update.DestinationTokenAddress
+                );
+
+                _logger.LogInformation(
+                    "GetOutputAmount | TokenIn: {TokenIn} | AmountIn: {AmountIn} | TokenOut: {TokenOut} | Result: {Result}",
+                    update.SourceTokenAddress,
+                    update.SourceAmountInWei,
+                    update.DestinationTokenAddress,
+                    result
+                );
+
+                return result;
+            }
+            catch (SmartContractRevertException revertEx)
+            {
+                _logger.LogError(
+                    revertEx,
+                    "Contract revert in getOutputAmount: {Message}",
+                    revertEx.Message
+                );
+
+                throw;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error in SwapGetOutputAmountAsync");
+                throw;
+            }
+        }
+      
+        private byte[] BuildLzOptions()
+        {
+            var hex = "0x00030100110100000000000000000000000000030d40";
+
+            return Nethereum.Hex.HexConvertors.Extensions.HexByteConvertorExtensions
+                .HexToByteArray(hex);
+        }
+        
+        private uint MapNetworkToEid(string network)
+        {
+            return network?.ToUpper() switch
+            {
+                "ERC20" => 30101,
+                "BEP20" => 30102,
+                "TRC20" => 30420,
+                _ => throw new BadRequestException($"Invalid network: {network}")
+            };
+        }
+
+        private string GetSwapContractAddress(string network)
+        {
+            return network?.ToUpper() switch
+            {
+                "ERC20" => _settings.ERC20SwapContractAddress,
+                "TRC20" => _settings.TRC20SwapContractAddress,
+                "BEP20" => _settings.BEP20SwapContractAddress,
+                _ => throw new BadRequestException($"Unsupported network: {network}")
+            };
+        }
+
+        #endregion
 
 
 
@@ -386,8 +543,12 @@ namespace CoinBank.Services._BlockChain
             {
                 case ContractType.PreSale:
                     return _settings.PreSaleContractAddress;
-                case ContractType.Swap:
-                    return _settings.SwapContractAddress;
+                case ContractType.ERC20Swap:
+                    return _settings.ERC20SwapContractAddress;
+                case ContractType.TRC20Swap:
+                    return _settings.TRC20SwapContractAddress;
+                case ContractType.BEP20Swap:
+                    return _settings.BEP20SwapContractAddress;
                 case ContractType.Stake:
                     return _settings.StakeContractAddress;
                 default:
@@ -398,7 +559,7 @@ namespace CoinBank.Services._BlockChain
         public async Task<Dictionary<string, decimal>> GetBalancesMultiCallAsync(ContractType contractType)
         {
             var balances = new Dictionary<string, decimal>();
-            var contractAddress =  GetContractAddressByType(contractType);
+            var contractAddress = GetContractAddressByType(contractType);
 
             var tokens = _availableTokenData;
 
@@ -554,8 +715,7 @@ namespace CoinBank.Services._BlockChain
             }
         }
 
-        public async Task<Dictionary<string, Dictionary<string, decimal>>> GetWalletsBalancesAsync(
-         List<string> walletAddresses)
+        public async Task<Dictionary<string, Dictionary<string, decimal>>> GetWalletsBalancesAsync(List<string> walletAddresses)
         {
             var result = new Dictionary<string, Dictionary<string, decimal>>(StringComparer.OrdinalIgnoreCase);
 
@@ -668,7 +828,7 @@ namespace CoinBank.Services._BlockChain
 
 
 
-       
+
 
         private AvailableTokenData ValidateToken(string tokenName)
         {

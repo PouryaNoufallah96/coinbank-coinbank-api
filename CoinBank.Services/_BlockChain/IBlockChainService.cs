@@ -12,6 +12,12 @@ namespace CoinBank.Services._BlockChain
         Task<string> PreSaleOrderClaimTokensByOperatorAsync(string presaleId, string orderId);
 
 
+        //Swap
+        Task<BigInteger> SwapGetEstimatedFeeAsync(GetSwapEstimatedFeeUpdate update);
+        Task<BigInteger> SwapGetOutputAmountAsync(SwapGetOutputAmount update);
+
+
+         
         //balance Methods
         Task<Dictionary<string, decimal>> GetContractBalancesAsync(ContractType contractType);
         Task<decimal> GetContractSingleBalanceAsync(string tokenName, ContractType contractType);

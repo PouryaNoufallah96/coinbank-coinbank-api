@@ -21,6 +21,8 @@
         public string PoolName { get; set; }
         public int PriceDecimalPlaces { get; set; }
         public int AmountDecimalPlaces { get; set; }
+        public bool CanSwap { get; set; } = false;
+        public bool SyncPrice { get; set; } = true;
         //public string LogoUrl { get; set; }
     }
 }
