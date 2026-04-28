@@ -26,15 +26,15 @@ namespace CoinBank.Domain.Collections
         public string DestinationWallet { get; set; }
 
         public string FeeToken { get; set; }
-        public decimal Fee { get; set; } 
+        public decimal Fee { get; set; }
         public string RegisterHash { get; set; }
-        public DateTime? RegisterMoment { get; set; } = null;  
+        public DateTime? RegisterMoment { get; set; } = null;
 
-        public SwapState State { get; set; } = SwapState.Pending;
+        public SwapState State { get; set; } = SwapState.NotRegistered;
         public List<SwapTransaction> Transactions { get; set; }
     }
 
-    public enum SwapState { Pending, Compelete, Canceled }
+    public enum SwapState { NotRegistered, Pending, Compelete, Canceled }
 
     public class SwapTransaction
     {
@@ -47,6 +47,6 @@ namespace CoinBank.Domain.Collections
         public SwapTransactionType Type { get; set; }
     }
 
-    public enum SwapTransactionType { Init , Execute}
+    public enum SwapTransactionType { Init, Execute }
 
 }

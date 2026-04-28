@@ -12,7 +12,9 @@ namespace CoinBank.Services._BlockChain.DTOs.Settings
         public int TransactionTimeoutSeconds { get; set; }
         public string PreSaleContractAddress { get; set; }
         public string StakeContractAddress { get; set; }
-        public string SwapContractAddress { get; set; }
+        public string ERC20SwapContractAddress { get; set; }
+        public string TRC20SwapContractAddress { get; set; }
+        public string BEP20SwapContractAddress { get; set; }
 
         public string DefaultGasLimit { get; set; }
         public string DefaultGasPriceGwei { get; set; }

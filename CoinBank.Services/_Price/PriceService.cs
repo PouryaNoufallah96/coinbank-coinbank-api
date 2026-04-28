@@ -157,6 +157,7 @@ namespace CoinBank.Services._Price
             try
             {
                 var tokens = _availableTokenDatas
+                    .Where(t => t.SyncPrice)
                     .Where(t => !string.IsNullOrWhiteSpace(t.Name))
                     .ToList();
 
@@ -325,6 +326,7 @@ namespace CoinBank.Services._Price
             try
             {
                 var tokens = _availableTokenDatas
+                    .Where(t => t.SyncPrice)
                     .Where(t => !string.IsNullOrWhiteSpace(t.Name))
                     .ToList();
 
