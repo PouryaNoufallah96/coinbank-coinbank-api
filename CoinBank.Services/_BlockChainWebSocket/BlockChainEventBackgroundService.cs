@@ -29,7 +29,6 @@ namespace CoinBank.Services._BlockChainWebSocket
         private readonly IPreSaleService _preSaleService;
         private readonly ILogger<BlockChainEventBackgroundService> _logger;
         private readonly BlockchainWebSocketSetting _settings;
-        private BigInteger _preSaleLastProcessedBlock = 0;
         private int _reconnectAttempts = 0;
         private DateTime _lastEventReceived = DateTime.UtcNow;
         private readonly SemaphoreSlim _reconnectLock = new(1, 1);
@@ -37,6 +36,9 @@ namespace CoinBank.Services._BlockChainWebSocket
         private readonly SemaphoreSlim _cleanupLock = new(1, 1);
         private IDisposable _preSaleContractEventsSubscription;
         private IDisposable _incomingTransferSubscription;
+        private IDisposable _swapContractEventsSubscription;
+        private BigInteger _swapLastProcessedBlock = 0;
+        private BigInteger _preSaleLastProcessedBlock = 0;
 
         private bool _useSecondaryWsUrl = false;
         private Web3 _web3;
@@ -440,7 +442,226 @@ namespace CoinBank.Services._BlockChainWebSocket
 
         #endregion
 
-        
+
+
+        #region Swap
+
+
+        private async Task SubscribeToSwapContractEventsAsync(CancellationToken cancellationToken)
+        {
+            var subscription = new EthLogsObservableSubscription(_webSocketClient);
+
+            var swapContracts = new[]
+            {
+                blockChainSettings.ERC20SwapContractAddress,
+                blockChainSettings.BEP20SwapContractAddress,
+                blockChainSettings.TRC20SwapContractAddress
+            };
+
+            var safeObservable = subscription.GetSubscriptionDataResponsesAsObservable()
+                .Where(log => swapContracts.Any(c => log.Address.IsTheSameAddress(c)))
+                .Select(log => Observable.FromAsync(() => SwapProcessContractEventLogAsync(log, cancellationToken)))
+                .Concat();
+
+            _swapContractEventsSubscription = safeObservable.Subscribe(
+                _ => { },
+                async ex =>
+                {
+                    _logger.LogError(ex, "Error in swap subscription. Reconnecting...");
+                    _ = Task.Run(async () => await TryConnectWithRetryAsync(cancellationToken));
+                },
+                () =>
+                {
+                    _logger.LogWarning("Swap subscription completed unexpectedly. Reconnecting...");
+                    _ = Task.Run(async () => await TryConnectWithRetryAsync(cancellationToken));
+                });
+
+            var filter = new NewFilterInput
+            {
+                Address = swapContracts,
+                FromBlock = new BlockParameter(await GetSwapLastProcessedBlock(cancellationToken))
+            };
+
+            await subscription.SubscribeAsync(filter);
+        }
+
+
+
+
+
+        private async Task SwapProcessContractEventLogAsync(FilterLog log, CancellationToken cancellationToken)
+        {
+            try
+            {
+                var network = ResolveNetworkFromAddress(log.Address);
+
+                var initiatedEvent = log.DecodeEvent<SwapInitiatedEventDTO>();
+                if (initiatedEvent != null)
+                {
+                    await HandleSwapInitiated(log, initiatedEvent, network);
+                    return;
+                }
+
+                var executedEvent = log.DecodeEvent<SwapExecutedEventDTO>();
+                if (executedEvent != null)
+                {
+                    await HandleSwapExecuted(log, executedEvent, network);
+                    return;
+                }
+
+                var failedEvent = log.DecodeEvent<SwapFailedEventDTO>();
+                if (failedEvent != null)
+                {
+                    await HandleSwapFailed(log, failedEvent, network);
+                    return;
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error decoding swap event");
+            }
+        }
+
+
+        private async Task HandleSwapInitiated(FilterLog log, EventLog<SwapInitiatedEventDTO> ev, string network)
+        {
+            var swapId = ByteArray32ToHex(ev.Event.SwapId);
+
+            await _transactionLogService.CreateSwapInitiatedLogAsync(new SwapInitiatedLog
+            {
+                Hash = log.TransactionHash,
+                Address = log.Address,
+                BlockNumber = log.BlockNumber.Value,
+
+                SwapId = swapId,
+                Buyer = ev.Event.Receiver,
+                SourceTokenAddress = ev.Event.TokenIn,
+                DestinationTokenAddress = ev.Event.TokenOut,
+                DesEid = ev.Event.DstEid,
+                SourceTokenAmount = ev.Event.AmountIn,
+                DestinationTokenAmount = ev.Event.AmountOut,
+                DestinationWallet = ev.Event.Receiver,
+                Fee = ev.Event.Fee.ToString(),
+                Network = network,
+
+                EventType = BlockchainEventType.SwapInitiated
+            });
+
+            lock (_blockLock)
+            {
+                _swapLastProcessedBlock = BigInteger.Max(_swapLastProcessedBlock, log.BlockNumber.Value + 1);
+            }
+        }
+
+        private async Task HandleSwapExecuted(FilterLog log, EventLog<SwapExecutedEventDTO> ev, string network)
+        {
+            var swapId = ByteArray32ToHex(ev.Event.SwapId);
+
+            await _transactionLogService.CreateSwapExecutedLogAsync(new SwapExecutedLog
+            {
+                Hash = log.TransactionHash,
+                Address = log.Address,
+                BlockNumber = log.BlockNumber.Value,
+
+                SwapId = swapId,
+                DestinationTokenAddress = ev.Event.TokenOut,
+                DestinationTokenAmount = ev.Event.AmountOut,
+                DestinationWallet = ev.Event.Receiver,
+                Network = network,
+
+                EventType = BlockchainEventType.SwapExecuted
+            });
+
+            lock (_blockLock)
+            {
+                _swapLastProcessedBlock = BigInteger.Max(_swapLastProcessedBlock, log.BlockNumber.Value + 1);
+            }
+        }
+
+        private async Task HandleSwapFailed(FilterLog log, EventLog<SwapFailedEventDTO> ev, string network)
+        {
+            var swapId = ByteArray32ToHex(ev.Event.SwapId);
+
+            await _transactionLogService.CreateSwapFailedLogAsync(new SwapFailedLog
+            {
+                Hash = log.TransactionHash,
+                Address = log.Address,
+                BlockNumber = log.BlockNumber.Value,
+
+                SwapId = swapId,
+                DestinationTokenAddress = ev.Event.TokenOut,
+                DestinationTokenAmount = ev.Event.AmountOut,
+                DestinationWallet = ev.Event.Receiver,
+                Network = network,
+
+                EventType = BlockchainEventType.SwapFailed
+            });
+
+            lock (_blockLock)
+            {
+                _swapLastProcessedBlock = BigInteger.Max(_swapLastProcessedBlock, log.BlockNumber.Value + 1);
+            }
+        }
+
+        private string ResolveNetworkFromAddress(string contractAddress)
+        {
+            if (contractAddress.IsTheSameAddress(blockChainSettings.ERC20SwapContractAddress))
+                return "ERC20";
+
+            if (contractAddress.IsTheSameAddress(blockChainSettings.BEP20SwapContractAddress))
+                return "BEP20";
+
+            if (contractAddress.IsTheSameAddress(blockChainSettings.TRC20SwapContractAddress))
+                return "TRC20";
+
+            return "UNKNOWN";
+        }
+
+
+        private async Task<HexBigInteger> GetSwapLastProcessedBlock(CancellationToken cancellationToken)
+        {
+            try
+            {
+                lock (_blockLock)
+                {
+                    if (_swapLastProcessedBlock > 0)
+                        return _swapLastProcessedBlock.ToHexBigInteger();
+                }
+
+                var lastDbBlock = await _transactionLogService.GetSwapLastCheckedBlockNumberAsync();
+
+                lock (_blockLock)
+                {
+                    _swapLastProcessedBlock = lastDbBlock;
+                }
+
+                if (_swapLastProcessedBlock > 0)
+                    return _swapLastProcessedBlock.ToHexBigInteger();
+
+                var latestBlockNumber = await _web3.Eth.Blocks.GetBlockNumber.SendRequestAsync();
+
+                lock (_blockLock)
+                {
+                    _swapLastProcessedBlock = latestBlockNumber;
+                }
+
+                return latestBlockNumber;
+            }
+            catch (Exception e)
+            {
+                _logger.LogError(e, "Error getting swap last processed block");
+                throw;
+            }
+        }
+        #endregion
+
+
+
+
+
+
+
+
         #region TrasferSide
         private async Task SubscribeToIncomingTransfersAsync(CancellationToken cancellationToken)
         {

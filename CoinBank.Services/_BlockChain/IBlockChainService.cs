@@ -13,11 +13,11 @@ namespace CoinBank.Services._BlockChain
 
 
         //Swap
-        Task<BigInteger> SwapGetEstimatedFeeAsync(GetSwapEstimatedFeeUpdate update);
+        Task<(decimal Fee, string token)> SwapGetEstimatedFeeAsync(GetSwapEstimatedFeeUpdate update);
         Task<BigInteger> SwapGetOutputAmountAsync(SwapGetOutputAmount update);
+        uint MapNetworkToEid(string network);
 
 
-         
         //balance Methods
         Task<Dictionary<string, decimal>> GetContractBalancesAsync(ContractType contractType);
         Task<decimal> GetContractSingleBalanceAsync(string tokenName, ContractType contractType);

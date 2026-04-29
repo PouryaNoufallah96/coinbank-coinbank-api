@@ -6,7 +6,7 @@ namespace CoinBank.Services._Price
     {
         Task<PriceResult> FetchTokenPriceFromGeckoTerminalAsync(string tokenName, string poolId = null);
         Task FetchAllPricesAsync();
-        Task<decimal> GetOneTokenPriceForInternalUsage(string tokenName);
+        Task<decimal> GetOneTokenPriceForInternalUsageAsync(string tokenName);
         Task<EffectivePriceResult> CalculateEffectivePriceAsync(string tokenName, decimal assetQuantity, decimal USDTAmount);
 
         Task<PriceResult> FetchTokenPriceFromCoinMarketCapAsync(string symbol);

@@ -52,7 +52,7 @@ namespace CoinBank.Services._Price
 
         }
 
-        public async Task<decimal> GetOneTokenPriceForInternalUsage(string tokenName)
+        public async Task<decimal> GetOneTokenPriceForInternalUsageAsync(string tokenName)
         {
             tokenName = tokenName.ToUpper();
 
