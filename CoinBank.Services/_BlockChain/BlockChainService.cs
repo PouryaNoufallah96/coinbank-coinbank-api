@@ -5,9 +5,12 @@ using CoinBank.Services._Common.DTOs.Settings;
 using CoinBank.Services._MultiCallService;
 using CoinBank.Services._MultiCallService.DTOs;
 using Microsoft.Extensions.Logging;
+using NBitcoin.Secp256k1;
 using Nethereum.ABI.FunctionEncoding;
 using Nethereum.ABI.Model;
 using Nethereum.Contracts;
+using Nethereum.Contracts.QueryHandlers.MultiCall;
+using Nethereum.Contracts.Standards.ERC20.TokenList;
 using Nethereum.Hex.HexConvertors.Extensions;
 using Nethereum.Util;
 using Nethereum.Web3;
@@ -299,7 +302,7 @@ namespace CoinBank.Services._BlockChain
 
         #region Swap Methods
 
-        public async Task<BigInteger> SwapGetEstimatedFeeAsync(GetSwapEstimatedFeeUpdate update)
+        public async Task<(decimal Fee, string token)> SwapGetEstimatedFeeAsync(GetSwapEstimatedFeeUpdate update)
         {
             if (update == null)
                 throw new BadRequestException("Update is required.");
@@ -314,7 +317,7 @@ namespace CoinBank.Services._BlockChain
                     update.SourceNetwork
                 );
 
-                return BigInteger.Zero;
+                return ConvertFeeFromWeiByNetwork(0, update.SourceNetwork);
             }
 
             try
@@ -329,7 +332,7 @@ namespace CoinBank.Services._BlockChain
                 var param = new object[]
                 {
                     swapIdBytes,
-                    MapNetworkToEid(update.DestinationNetwork),
+                    update.DstEid,
                     update.SourceTokenAddress,
                     update.DestinationTokenAddress,
                     update.SourceAmoutInWei,
@@ -357,8 +360,7 @@ namespace CoinBank.Services._BlockChain
                     throw new BadRequestException("Invalid fee returned from contract.");
                 }
 
-                return result;
-
+                return ConvertFeeFromWeiByNetwork(result, update.SourceNetwork);
             }
             catch (SmartContractRevertException revertEx)
             {
@@ -376,6 +378,19 @@ namespace CoinBank.Services._BlockChain
                 throw;
             }
         }
+
+        private (decimal Fee, string token) ConvertFeeFromWeiByNetwork(BigInteger fee, string network)
+        {
+            return network?.ToUpper() switch
+            {
+                "ERC20" => (ConvertFromWei(fee, 18), "ETH"),
+                "BEP20" => (ConvertFromWei(fee, 18), "BNB"),
+                "TRC20" => (ConvertFromWei(fee, 6), "TRON"),
+                _ => throw new BadRequestException($"Invalid network: {network}")
+            };
+        }
+
+
 
         public async Task<BigInteger> SwapGetOutputAmountAsync(SwapGetOutputAmount update)
         {
@@ -468,7 +483,7 @@ namespace CoinBank.Services._BlockChain
             var contractAddress = GetContractAddressByType(type);
             try
             {
-                foreach (var token in _availableTokenData)
+                foreach (var token in _availableTokenData.Where(q => q.SyncPrice))
                 {
                     try
                     {

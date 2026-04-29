@@ -1,6 +1,5 @@
 ﻿using CoinBank.Domain.Collections;
 using CoinBank.Services._Common.DTOs;
-using CoinBank.Services._PreSaleRelease.DTOs.Results;
 
 namespace CoinBank.Services._PreSaleOrder.DTOs.Results
 {

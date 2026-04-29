@@ -63,7 +63,7 @@ namespace CoinBank.Services._Stake
             var end = start.AddMonths(update.Duration);
 
             var reference = Guid.NewGuid().ToString("N");
-            var tokenPrice = await _priceService.GetOneTokenPriceForInternalUsage(symbol);
+            var tokenPrice = await _priceService.GetOneTokenPriceForInternalUsageAsync(symbol);
 
             var stake = new Stake
             {

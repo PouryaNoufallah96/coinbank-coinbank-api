@@ -31,7 +31,7 @@ namespace CoinBank.Domain.Collections
         public DateTime? RegisterMoment { get; set; } = null;
 
         public SwapState State { get; set; } = SwapState.NotRegistered;
-        public List<SwapTransaction> Transactions { get; set; }
+        public List<SwapTransaction> Transactions { get; set; } = [];
     }
 
     public enum SwapState { NotRegistered, Pending, Compelete, Canceled }
@@ -41,12 +41,12 @@ namespace CoinBank.Domain.Collections
 
         public DateTime CreateMoment { get; set; }
         public string Hash { get; set; }
-        public string Symbol { get; set; }
         public string Network { get; set; }
+        public string Symbol { get; set; }
         public decimal Amount { get; set; }
         public SwapTransactionType Type { get; set; }
     }
 
-    public enum SwapTransactionType { Init, Execute }
+    public enum SwapTransactionType { Init, Execute ,Failed}
 
 }

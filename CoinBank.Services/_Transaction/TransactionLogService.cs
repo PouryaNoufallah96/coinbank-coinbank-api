@@ -2,6 +2,7 @@
 using CoinBank.Domain.Repositories.Contracts;
 using CoinBank.Services._Common.DTOs.Settings;
 using CoinBank.Services._PreSaleOrder;
+using CoinBank.Services._Swap;
 using CoinBank.Services._Transaction._Hub;
 using CoinBank.Services._Transaction.DTOs.Updates;
 using Microsoft.AspNetCore.SignalR;
@@ -18,10 +19,12 @@ namespace CoinBank.Services._Transaction
         ITransactionLogRepository _transactionLogRepository,
         ILogger<TransactionLogService> _logger,
         IPreSaleOrderService _preSaleOrderService,
+        ISwapService _swapService,
         AvailableTokensSettings _availableTokenData,
         IHubContext<WalletNotifyHub> _hubContext) : ITransactionLogService, IScopedDependency
     {
 
+        #region PreSale
         public async Task CreatePreSaleOrderCreateLogAsync(PreSaleOrderCreateLog input)
         {
             try
@@ -133,6 +136,213 @@ namespace CoinBank.Services._Transaction
             }
         }
 
+        public async Task<BigInteger> GetPreSaleOrderLastCheckedBlockNumberAsync()
+        {
+            var lastBlock = await _transactionLogRepository
+             .AsQueryable()
+             .Where(h => h.EventType == BlockchainEventType.PreSaleOrderCreate)
+             .OrderByDescending(b => b)
+             .FirstOrDefaultAsync();
+            if (lastBlock == null)
+            {
+                return BigInteger.Zero;
+            }
+            return new BigInteger(lastBlock.BlockNumber);
+        }
+
+        #endregion
+
+
+
+        #region Swap
+
+        public async Task CreateSwapInitiatedLogAsync(SwapInitiatedLog input)
+        {
+            try
+            {
+                var existsLog = await _transactionLogRepository.AsQueryable()
+                    .Where(q =>
+                        q.Hash.ToLower() == input.Hash.ToLower() &&
+                        q.Reference.ToLower() == input.SwapId.ToLower() &&
+                        q.EventType == BlockchainEventType.SwapInitiated)
+                    .FirstOrDefaultAsync();
+
+                if (existsLog != null)
+                {
+                    _logger.LogWarning(
+                        "Duplicate SwapInitiated log detected for SwapId {SwapId}. Skipping insertion. Hash: {Hash}",
+                        input.SwapId, input.Hash);
+                    return;
+                }
+
+
+
+                var newLog = new TransactionLog
+                {
+                    Hash = input.Hash,
+                    Wallet = input.Buyer,
+                    BlockNumber = (decimal)input.BlockNumber,
+                    EventType = BlockchainEventType.SwapInitiated,
+                    Status = TransactionStatus.Confirmed,
+
+                    Reference = input.SwapId,
+                    TokenAddress = input.SourceTokenAddress,
+
+                    Data = SerializeData(input)
+                };
+
+                await _transactionLogRepository.InsertOneAsync(newLog);
+
+
+                await _swapService.AddTransactionToSwapAsync(new _Swap.DTOs.Updates.AddTransactionToSwapUpdate
+                {
+                    SwapReference = input.SwapId,
+                    Amount = input.SourceTokenAmount,
+                    Hash = input.Hash,
+                    Network = input.Network,
+                    TokenAddress = input.SourceTokenAddress,
+                    Type = SwapTransactionType.Init
+                });
+
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error while creating SwapInitiated transaction log.");
+            }
+        }
+
+        public async Task CreateSwapExecutedLogAsync(SwapExecutedLog input)
+        {
+            try
+            {
+                var existsLog = await _transactionLogRepository.AsQueryable()
+                    .Where(q =>
+                        q.Hash.ToLower() == input.Hash.ToLower() &&
+                        q.Reference.ToLower() == input.SwapId.ToLower() &&
+                        q.EventType == BlockchainEventType.SwapExecuted)
+                    .FirstOrDefaultAsync();
+
+                if (existsLog != null)
+                {
+                    _logger.LogWarning(
+                        "Duplicate SwapExecuted log detected for SwapId {SwapId}. Skipping insertion. Hash: {Hash}",
+                        input.SwapId, input.Hash);
+                    return;
+                }
+
+                var newLog = new TransactionLog
+                {
+                    Hash = input.Hash,
+                    Wallet = input.DestinationWallet,
+                    BlockNumber = (decimal)input.BlockNumber,
+                    EventType = BlockchainEventType.SwapExecuted,
+                    Status = TransactionStatus.Confirmed,
+
+                    Reference = input.SwapId,
+                    TokenAddress = input.DestinationTokenAddress,
+
+                    Data = SerializeData(input)
+                };
+
+                await _transactionLogRepository.InsertOneAsync(newLog);
+
+
+                await _swapService.AddTransactionToSwapAsync(new _Swap.DTOs.Updates.AddTransactionToSwapUpdate
+                {
+                    SwapReference = input.SwapId,
+                    Amount = input.DestinationTokenAmount,
+                    Hash = input.Hash,
+                    Network = input.Network,
+                    TokenAddress = input.DestinationTokenAddress,
+                    Type = SwapTransactionType.Execute
+                });
+
+              
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error while creating SwapExecuted transaction log.");
+            }
+        }
+
+        public async Task CreateSwapFailedLogAsync(SwapFailedLog input)
+        {
+            try
+            {
+                var existsLog = await _transactionLogRepository.AsQueryable()
+                    .Where(q =>
+                        q.Hash.ToLower() == input.Hash.ToLower() &&
+                        q.Reference.ToLower() == input.SwapId.ToLower() &&
+                        q.EventType == BlockchainEventType.SwapFailed)
+                    .FirstOrDefaultAsync();
+
+                if (existsLog != null)
+                {
+                    _logger.LogWarning(
+                        "Duplicate SwapFailed log detected for SwapId {SwapId}. Skipping insertion. Hash: {Hash}",
+                        input.SwapId, input.Hash);
+                    return;
+                }
+
+                var newLog = new TransactionLog
+                {
+                    Hash = input.Hash,
+                    Wallet = input.DestinationWallet,
+                    BlockNumber = (decimal)input.BlockNumber,
+                    EventType = BlockchainEventType.SwapFailed,
+                    Status = TransactionStatus.Failed,
+
+                    Reference = input.SwapId,
+                    TokenAddress = input.DestinationTokenAddress,
+
+                    Data = SerializeData(input)
+                };
+
+                await _transactionLogRepository.InsertOneAsync(newLog);
+
+                await _swapService.AddTransactionToSwapAsync(new _Swap.DTOs.Updates.AddTransactionToSwapUpdate
+                {
+                    SwapReference = input.SwapId,
+                    Amount = input.DestinationTokenAmount,
+                    Hash = input.Hash,
+                    Network = input.Network,
+                    TokenAddress = input.DestinationTokenAddress,
+                    Type = SwapTransactionType.Failed
+                });
+
+
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error while creating SwapFailed transaction log.");
+            }
+        }
+
+        public async Task<BigInteger> GetSwapLastCheckedBlockNumberAsync()
+        {
+            var lastBlock = await _transactionLogRepository
+                .AsQueryable()
+                .Where(h =>
+                    h.EventType == BlockchainEventType.SwapInitiated)
+                //||
+                //    h.EventType == BlockchainEventType.SwapExecuted ||
+                //    h.EventType == BlockchainEventType.SwapFailed)
+                .OrderByDescending(b => b.BlockNumber)
+                .FirstOrDefaultAsync();
+
+            if (lastBlock == null)
+            {
+                return BigInteger.Zero;
+            }
+
+            return new BigInteger(lastBlock.BlockNumber);
+        }
+
+        #endregion
+
+
+
+
 
 
         /// <summary>
@@ -154,19 +364,6 @@ namespace CoinBank.Services._Transaction
         }
 
 
-        public async Task<BigInteger> GetPreSaleOrderLastCheckedBlockNumberAsync() 
-        {
-            var lastBlock = await _transactionLogRepository
-             .AsQueryable()
-             .Where(h => h.EventType == BlockchainEventType.PreSaleOrderCreate)
-             .OrderByDescending(b => b)
-             .FirstOrDefaultAsync();
-            if (lastBlock == null)
-            {
-                return BigInteger.Zero;
-            }
-            return new BigInteger(lastBlock.BlockNumber);
-        }
 
 
         private string SerializeData<T>(T input)
@@ -190,6 +387,35 @@ namespace CoinBank.Services._Transaction
                     AmountClaimed = x.AmountClaimed
                 },
 
+                SwapInitiatedLog x => new SwapInitiatedLogData
+                {
+                    SwapId = x.SwapId,
+                    SourceTokenAddress = x.SourceTokenAddress,
+                    DestinationTokenAddress = x.DestinationTokenAddress,
+                    DesEid = x.DesEid,
+                    SourceTokenAmount = x.SourceTokenAmount,
+                    DestinationTokenAmount = x.DestinationTokenAmount,
+                    DestinationWallet = x.DestinationWallet,
+                    Fee = x.Fee
+                },
+
+                SwapExecutedLog x => new SwapExecutedLogData
+                {
+                    SwapId = x.SwapId,
+                    DestinationTokenAddress = x.DestinationTokenAddress,
+                    DestinationTokenAmount = x.DestinationTokenAmount,
+                    DestinationWallet = x.DestinationWallet
+                },
+
+                SwapFailedLog x => new SwapFailedLogData
+                {
+                    SwapId = x.SwapId,
+                    DestinationTokenAddress = x.DestinationTokenAddress,
+                    DestinationTokenAmount = x.DestinationTokenAmount,
+                    DestinationWallet = x.DestinationWallet
+                },
+
+
                 _ => throw new NotSupportedException($"No serializer defined for type {typeof(T).Name}")
             };
 
@@ -211,16 +437,7 @@ namespace CoinBank.Services._Transaction
             });
         }
 
-        private AvailableTokenData ValidateToken(string tokenName)
-        {
-
-            if (tokenName == null)
-                throw new BadRequestException($"Unsupported token name! {tokenName}");
-
-            var tokenData = _availableTokenData.FirstOrDefault(q => q.Name.Equals(tokenName, StringComparison.OrdinalIgnoreCase))
-                ?? throw new BadRequestException($"Unsupported token name! {tokenName}");
-            return tokenData;
-        }
+       
 
     }
 }

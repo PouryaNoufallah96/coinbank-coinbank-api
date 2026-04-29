@@ -3,6 +3,13 @@ using CoinBank.Services._Common.DTOs;
 
 namespace CoinBank.Services._Swap.DTOs.Results
 {
+    public class SwapListResult
+    {
+        public List<SwapResult> Data { get; set; } = [];
+        public int PageCount { get; set; } = 0;
+        public int TotalCount { get; set; } = 0;
+    }
+
     public class SwapResult : CommonResult
     {
         public string SwapReference { get; set; }
@@ -22,9 +29,12 @@ namespace CoinBank.Services._Swap.DTOs.Results
         public string DestinationAmountInWei { get; set; }
         public string DestinationWallet { get; set; }
 
-        public string FeeToken { get; set; } 
-        public decimal Fee { get; set; }      
-        public SwapState State { get; set; }
-        public List<SwapTransaction> Transactions { get; set; } = [];
+        public string FeeToken { get; set; }
+        public decimal Fee { get; set; }
+
+        public SwapState State { get; set; } 
+        public List<SwapTransaction> Transactions { get; set; }
     }
+
+
 }

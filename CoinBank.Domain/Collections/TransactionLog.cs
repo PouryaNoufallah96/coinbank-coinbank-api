@@ -30,6 +30,9 @@ namespace CoinBank.Domain.Collections
     {
         PreSaleOrderCreate,
         PreSaleReleaseClaimed, 
+        SwapInitiated,
+        SwapExecuted,
+        SwapFailed,
         TransactionConfirmed, 
         TransactionFailed,
         BlockMined,
