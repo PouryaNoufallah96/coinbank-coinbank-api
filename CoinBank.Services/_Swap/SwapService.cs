@@ -11,6 +11,7 @@ using CoinBank.Services._Transaction._Hub;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.CodeAnalysis;
 using Microsoft.Extensions.Logging;
+using Microsoft.IdentityModel.Tokens;
 using MongoDB.Driver;
 using MongoDB.Driver.Linq;
 using Utilities.Exceptions.Common;
@@ -27,8 +28,10 @@ namespace CoinBank.Services._Swap
         AvailableTokensSettings _availableTokenDatas) : ISwapService, IScopedDependency
     {
 
-        public async Task<SwapCreatedResult> CreateSwapAsync(CreateSwapUpdate update, string walletAddress, string publicKey)
+        public async Task<SwapCreatedResult> CreateSwapAsync(CreateSwapUpdate update, string EVMwalletAddress, string TronWalletAddress, string publicKey)
         {
+
+            var walletAddress = SpesifyWalletAddress(EVMwalletAddress, TronWalletAddress, update.SourceNetwork.ToUpper());
 
             ValidateDifferentTokens(update);
             var sourceTokenData = GetAndValidateSwappableToken(update.SourceNetwork, update.SourceSymbol);
@@ -140,7 +143,31 @@ namespace CoinBank.Services._Swap
             };
         }
 
-        public async Task<SwapListResult> GetSwapHistoryAsync(SwapHistoryUpdate update, string walletAddress, string publicKey)
+        private string SpesifyWalletAddress(string EVMwalletAddress, string TromWalletAddress, string network)
+        {
+            if (network == "BEP20")
+            {
+                if (EVMwalletAddress.IsNullOrEmpty()) throw new BadRequestException("Please sign with your BSC wallet");
+                return EVMwalletAddress;
+            }
+            else if (network == "ERC20")
+            {
+                if (EVMwalletAddress.IsNullOrEmpty()) throw new BadRequestException("Please sign with your ETH wallet");
+                return EVMwalletAddress;
+
+            }
+            else if (network == "TRC20")
+            {
+                if (TromWalletAddress.IsNullOrEmpty()) throw new BadRequestException("Please sign with your TRON wallet");
+                return TromWalletAddress;
+
+            }
+            else throw new BadRequestException("Wrong network!");
+
+
+        }
+
+        public async Task<SwapListResult> GetSwapHistoryAsync(SwapHistoryUpdate update, string EVMwalletAddress, string TronWalletAddress, string publicKey)
         {
             var query = _swapRepository.AsQueryable();
 
@@ -159,8 +186,8 @@ namespace CoinBank.Services._Swap
             if (publicKey == "guess")
             {
                 query = query.Where(x =>
-                    x.WalletAddress == walletAddress &&
-                    x.State != SwapState.NotRegistered);
+                    (x.WalletAddress == EVMwalletAddress || x.WalletAddress == TronWalletAddress) 
+                    && x.State != SwapState.NotRegistered);
             }
             else
             {
@@ -190,7 +217,7 @@ namespace CoinBank.Services._Swap
             return result;
         }
 
-        public async Task<SwapResult> GetOneSwapByReferenceAsync(SwapReferenceUpdate update, string walletAddress, string publicKey)
+        public async Task<SwapResult> GetOneSwapByReferenceAsync(SwapReferenceUpdate update, string EVMwalletAddress, string TronWalletAddress, string publicKey)
         {
 
             if (string.IsNullOrWhiteSpace(publicKey))
@@ -205,7 +232,7 @@ namespace CoinBank.Services._Swap
             if (publicKey == "guess")
             {
                 query = query.Where(x =>
-                    x.WalletAddress == walletAddress);
+                    x.WalletAddress == EVMwalletAddress || x.WalletAddress == TronWalletAddress);
             }
             else
             {
