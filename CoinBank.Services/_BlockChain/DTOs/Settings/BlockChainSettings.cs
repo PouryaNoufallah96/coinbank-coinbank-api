@@ -4,14 +4,31 @@ namespace CoinBank.Services._BlockChain.DTOs.Settings
 {
     public class BlockChainSettings
     {
-        public string RpcUrl { get; set; }
-        public string RpcUrl2 { get; set; }
+        public string BEP20RpcUrl { get; set; }
+        public string BEP20WsUrl { get; set; }
+
+        public string BEP20RpcUrl2 { get; set; }
+        public string BEP20WsUrl2 { get; set; }
+
+        public string ERC20RpcUrl { get; set; }
+        public string ERC20WsUrl { get; set; } 
+
+        public string TRC20RpcUrl { get; set; }
+        public string TRC20WsUrl { get; set; } 
+
+         
         public string PrivateKey { get; set; }
         public string PublicAddress { get; set; }
-        public long ChainId { get; set; }
+        public long BEP20ChainId { get; set; }
+        public long ERC20ChainId { get; set; } 
         public int TransactionTimeoutSeconds { get; set; }
+
+
+
+
         public string PreSaleContractAddress { get; set; }
         public string StakeContractAddress { get; set; }
+
         public string ERC20SwapContractAddress { get; set; }
         public string TRC20SwapContractAddress { get; set; }
         public string BEP20SwapContractAddress { get; set; }
@@ -20,6 +37,12 @@ namespace CoinBank.Services._BlockChain.DTOs.Settings
         public string DefaultGasPriceGwei { get; set; }
         public string MinGasPriceGwei { get; set; }
         public string MaxGasPriceGwei { get; set; }
+
+        public int ReconnectInterval { get; set; } = 5;
+        public int MaxReconnectAttempts { get; set; } = 30;
+        public int HeartbeatInterval { get; set; } = 30;
+        public int ConnectionTimeout { get; set; } = 10;
+        public int SubscriptionTimeout { get; set; } = 30;
 
         public BigInteger GetDefaultGasLimit() => BigInteger.Parse(DefaultGasLimit);
         public BigInteger GetDefaultGasPriceGwei() => BigInteger.Parse(DefaultGasPriceGwei);

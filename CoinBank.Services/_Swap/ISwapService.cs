@@ -12,5 +12,8 @@ namespace CoinBank.Services._Swap
 
         Task AddTransactionToSwapAsync(AddTransactionToSwapUpdate update);
 
+        Task InitializeSwapStorageAsync();
+        Task UpdateSingleTokenInStorageAsync(string tokenAddress, string network);
+
     }
 }

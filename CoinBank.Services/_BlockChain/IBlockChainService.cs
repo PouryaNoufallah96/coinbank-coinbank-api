@@ -19,21 +19,26 @@ namespace CoinBank.Services._BlockChain
 
 
         //balance Methods
-        Task<Dictionary<string, decimal>> GetContractBalancesAsync(ContractType contractType);
-        Task<decimal> GetContractSingleBalanceAsync(string tokenName, ContractType contractType);
-        Task<Dictionary<string, decimal>> GetBalancesMultiCallAsync(ContractType contractType);
-        Task<Dictionary<string, decimal>> GetWalletAddressBalanceAsync(string walletAddress);
-        Task<decimal> GetWalletAddressSingleTokenBalanceAsync(string walletAddress,string tokenName);
-        Task<Dictionary<string, Dictionary<string, decimal>>> GetWalletsBalancesAsync(
-           List<string> walletAddresses);
-       
+        Task<Dictionary<string, decimal>> GetPreSaleContractBalancesAsync();
+        Task<decimal> GetPreSaleContractSingleBalanceAsync(string tokenName);
+
+        Task<decimal> GetBEP20WalletAddressSingleTokenBalanceAsync(string walletAddress,string tokenName);
+        Task<decimal> GetERC20WalletAddressSingleTokenBalanceAsync(string walletAddress,string tokenName);
+        Task<Dictionary<string, decimal>> GetBep20SwapContractBalancesAsync(List<string> symbols = null);
+        Task<Dictionary<string, decimal>> GetERC20SwapContractBalancesAsync(List<string> symbols = null);
+        Task<Dictionary<string, decimal>> GetTRC20ContractBalancesTronScanAsync(List<string> symbols = null);
+        Task<decimal> GetTRC20UsdtBalanceAsync(string walletAddress);
+
+
+
         // Utility Methods
         decimal ConvertFromWei(BigInteger weiAmount, int decimals = 18);
         BigInteger ConvertToWei(decimal amount, int decimals = 18);
 
-
        
         Task<BigInteger> PreSaleOrderGetNonceAsync(string address, string saleId);
-
     }
 }
+
+//Task<Dictionary<string, decimal>> GetBalancesMultiCallAsync(ContractType contractType);
+//Task<Dictionary<string, decimal>> GetWalletBEP20AddressBalanceAsync(string walletAddress);

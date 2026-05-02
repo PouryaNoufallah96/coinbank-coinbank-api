@@ -22,6 +22,8 @@
         public int PriceDecimalPlaces { get; set; }
         public int AmountDecimalPlaces { get; set; }
         public bool CanSwap { get; set; } = false;
+        public decimal MinSwapAmount { get; set; } 
+        public decimal MaxSwapAmount { get; set; }  
         public bool SyncPrice { get; set; } = true;
         //public string LogoUrl { get; set; }
     }

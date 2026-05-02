@@ -52,7 +52,7 @@ namespace CoinBank.Services._Stake
                 ?? throw new BadRequestException("Invalid staking duration. Allowed durations are based on configured plans 12 and 24 month");
 
 
-            var tokenBalance = await _blockChainService.GetWalletAddressSingleTokenBalanceAsync(evmWalletAddress, symbol);
+            var tokenBalance = await _blockChainService.GetBEP20WalletAddressSingleTokenBalanceAsync(evmWalletAddress, symbol);
             if (tokenBalance < update.Amount)
                 throw new BadRequestException($"Insufficient {symbol} balance!");
 

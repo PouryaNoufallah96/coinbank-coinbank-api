@@ -9,7 +9,6 @@ using CoinBank.Services._PreSale;
 using CoinBank.Services._PreSale.DTOs.Storages;
 using CoinBank.Services._PreSaleOrder.DTOs.Results;
 using CoinBank.Services._PreSaleOrder.DTOs.Updates;
-using CoinBank.Services._PreSaleRelease;
 using CoinBank.Services._Transaction._Hub;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.CodeAnalysis;
@@ -474,7 +473,7 @@ namespace CoinBank.Services._PreSaleOrder
             {
                 Name = "CoinBankPresale",
                 Version = "1",
-                ChainId = _blockChainSettings.ChainId,
+                ChainId = _blockChainSettings.BEP20ChainId,
                 VerifyingContract = _blockChainSettings.PreSaleContractAddress
             };
 
@@ -569,7 +568,7 @@ namespace CoinBank.Services._PreSaleOrder
         private async Task ValidateUserAndContractBalance(string wallet, decimal price, decimal amount,string symbol)
         {
             var balance = await _blockChainService
-                .GetWalletAddressSingleTokenBalanceAsync(wallet, "RZUSD");
+                .GetBEP20WalletAddressSingleTokenBalanceAsync(wallet, "RZUSD");
 
             var required = price * amount;
 
@@ -586,7 +585,7 @@ namespace CoinBank.Services._PreSaleOrder
 
             if (contractBalance < amount)
             {
-                contractBalance = await _blockChainService.GetContractSingleBalanceAsync(symbol,ContractType.PreSale);
+                contractBalance = await _blockChainService.GetPreSaleContractSingleBalanceAsync(symbol);
 
                 _preSaleStorage.UpdateContractBalance(symbol, contractBalance);
 
