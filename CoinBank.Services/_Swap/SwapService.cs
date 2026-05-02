@@ -5,9 +5,11 @@ using CoinBank.Services._Common.DTOs.Settings;
 using CoinBank.Services._Common.Services;
 using CoinBank.Services._Price;
 using CoinBank.Services._Swap.DTOs.Results;
+using CoinBank.Services._Swap.DTOs.Storages;
 using CoinBank.Services._Swap.DTOs.Updates;
 using CoinBank.Services._Transaction._Hub;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.CodeAnalysis;
 using Microsoft.Extensions.Logging;
 using MongoDB.Driver;
 using MongoDB.Driver.Linq;
@@ -19,19 +21,19 @@ namespace CoinBank.Services._Swap
     public class SwapService(ISwapRepository _swapRepository,
         IBlockChainService _blockChainService,
         IPriceService _priceService,
-         ILogger<SwapService> _logger,
+        ILogger<SwapService> _logger,
+        SwapStorage _swapStorage,
         IHubContext<WalletNotifyHub> _hubContext,
         AvailableTokensSettings _availableTokenDatas) : ISwapService, IScopedDependency
     {
-
 
         public async Task<SwapCreatedResult> CreateSwapAsync(CreateSwapUpdate update, string walletAddress, string publicKey)
         {
 
             ValidateDifferentTokens(update);
-            var sourceTokenData = ValidateTokenInNetwork(update.SourceNetwork, update.SourceSymbol);
-            var destinationTokenData = ValidateTokenInNetwork(update.DestinationNetwork, update.DestinationToken);
-
+            var sourceTokenData = GetAndValidateSwappableToken(update.SourceNetwork, update.SourceSymbol);
+            var destinationTokenData = GetAndValidateSwappableToken(update.DestinationNetwork, update.DestinationToken);
+            await ValidateBalancesForSwapAsync(update, walletAddress);
 
             #region Source
             var swapReference = IdGenerartor.GenerateBytes32HexId();
@@ -240,13 +242,8 @@ namespace CoinBank.Services._Swap
 
         public async Task AddTransactionToSwapAsync(AddTransactionToSwapUpdate update)
         {
-
             if (update == null || string.IsNullOrWhiteSpace(update.SwapReference))
                 return;
-
-            var swap = await _swapRepository.AsQueryable().FirstOrDefaultAsync(q => q.SwapReference == update.SwapReference);
-            if (swap == null) return;
-            
 
             var tokenData = GetTokenWithAddressAndNetwork(update.TokenAddress, update.Network);
             var tokenAmount = _blockChainService.ConvertFromWei(update.Amount, tokenData.PriceDecimalPlaces);
@@ -261,31 +258,75 @@ namespace CoinBank.Services._Swap
                 Type = update.Type
             };
 
+            var baseFilter = Builders<Swap>.Filter.Eq(x => x.SwapReference, update.SwapReference);
 
-            var filter = Builders<Swap>.Filter.Eq(x => x.SwapReference, update.SwapReference);
+            var newState = update.Type switch
+            {
+                SwapTransactionType.Init => SwapState.Pending,
+                SwapTransactionType.Execute => SwapState.Completed,
+                SwapTransactionType.Failed => SwapState.Failed,
+                _ => (SwapState?)null
+            };
 
-            var updateDefinition = Builders<Swap>.Update
+            var updateBuilder = Builders<Swap>.Update
                 .Push(x => x.Transactions, transaction);
 
-            await _swapRepository.FindOneAndUpdateAsync(filter, updateDefinition);
+            if (newState.HasValue)
+                updateBuilder = updateBuilder.Set(x => x.State, newState.Value);
+
+            FilterDefinition<Swap> finalFilter = baseFilter;
+
+            if (update.Type == SwapTransactionType.Execute)
+            {
+                var amountFilter = Builders<Swap>.Filter.Lt(x => x.DestinationAmount, tokenAmount);
+                finalFilter = Builders<Swap>.Filter.And(baseFilter, amountFilter);
+
+                updateBuilder = updateBuilder.Set(x => x.DestinationAmount, tokenAmount);
+            }
+
+            var options = new FindOneAndUpdateOptions<Swap>
+            {
+                ReturnDocument = ReturnDocument.After
+            };
+
+            var updatedSwap = await _swapRepository.FindOneAndUpdateWithOptionAsync(finalFilter, updateBuilder, options);
+
+            if (updatedSwap == null && update.Type == SwapTransactionType.Execute)
+            {
+                updatedSwap = await _swapRepository.FindOneAndUpdateWithOptionAsync(
+                    baseFilter,
+                    Builders<Swap>.Update
+                        .Push(x => x.Transactions, transaction)
+                        .Set(x => x.State, SwapState.Completed),
+                    options
+                );
+            }
+
+            if (updatedSwap == null)
+                return;
 
             string message = update.Type switch
             {
                 SwapTransactionType.Init =>
-                    $"Swap started: {swap.SourceAmount} {swap.SourceSymbol} → {swap.DestinationSymbol}.",
+                    $"Swap started: {updatedSwap.SourceAmount} {updatedSwap.SourceSymbol} → {updatedSwap.DestinationSymbol}.",
 
                 SwapTransactionType.Execute =>
-                    $"Swap completed: You received {swap.DestinationAmount} {swap.DestinationSymbol}.",
+                    $"Swap completed: You received {updatedSwap.DestinationAmount} {updatedSwap.DestinationSymbol}.",
 
                 SwapTransactionType.Failed =>
-                    $"Swap failed: {swap.SourceSymbol} → {swap.DestinationSymbol}. Please try again.",
+                    $"Swap failed: {updatedSwap.SourceSymbol} → {updatedSwap.DestinationSymbol}. Please try again.",
 
                 _ => "Swap status updated."
             };
 
+            if (update.Type == SwapTransactionType.Execute)
+            {
+                await UpdateSingleTokenInStorageAsync(update.TokenAddress, update.Network);
+            }
+
             try
             {
-                await _hubContext.Clients.Group(swap.WalletAddress)
+                await _hubContext.Clients.Group(updatedSwap.WalletAddress)
                     .SendAsync("SwapMessage", message);
             }
             catch (Exception ex)
@@ -294,10 +335,175 @@ namespace CoinBank.Services._Swap
                     "Failed to send Swap notification for SwapReference {SwapReference}",
                     update.SwapReference);
             }
-
-
         }
 
+        public async Task InitializeSwapStorageAsync()
+        {
+            try
+            {
+
+                var swappableTokens = _availableTokenDatas
+                    .Where(t => t.CanSwap)
+                    .ToList();
+
+                var result = new Dictionary<string, SwapData>();
+
+
+                var trc20Tokens = swappableTokens
+                    .Where(t => t.Network == "TRC20")
+                    .ToList();
+
+                var bep20Tokens = swappableTokens
+                    .Where(t => t.Network == "BEP20")
+                    .ToList();
+
+                var erc20Tokens = swappableTokens
+                    .Where(t => t.Network == "ERC20")
+                    .ToList();
+
+
+
+                // TRC20
+                Dictionary<string, decimal> trc20Balances = new();
+                if (trc20Tokens.Any())
+                {
+                    trc20Balances = await _blockChainService
+                        .GetTRC20ContractBalancesTronScanAsync(trc20Tokens.Select(t => t.Name).ToList());
+                }
+
+                // BEP20
+                Dictionary<string, decimal> bep20Balances = new();
+                if (bep20Tokens.Any())
+                {
+                    bep20Balances = await _blockChainService
+                        .GetBep20SwapContractBalancesAsync(bep20Tokens.Select(t => t.Name).ToList());
+                }
+
+                // ERC20
+                Dictionary<string, decimal> erc20Balances = new();
+                if (erc20Tokens.Any())
+                {
+                    erc20Balances = await _blockChainService
+                        .GetERC20SwapContractBalancesAsync(erc20Tokens.Select(t => t.Name).ToList());
+                }
+
+
+                foreach (var token in swappableTokens)
+                {
+                    decimal balance = 0;
+
+                    switch (token.Network)
+                    {
+                        case "TRC20":
+                            trc20Balances.TryGetValue(token.Name, out balance);
+                            break;
+
+                        case "BEP20":
+                            bep20Balances.TryGetValue(token.Name, out balance);
+                            break;
+
+                        case "ERC20":
+                            erc20Balances.TryGetValue(token.Name, out balance);
+                            break;
+                    }
+
+                    var swapData = new SwapData
+                    {
+                        Name = token.Name,
+                        Symbol = token.Name,
+                        Network = token.Network,
+                        ContractBalance = balance,
+                        MinSwapAmount = token.MinSwapAmount,
+                        MaxSwapAmount = token.MaxSwapAmount,
+                        LastUpdated = DateTime.UtcNow
+                    };
+
+                    result[token.Address] = swapData;
+                }
+
+
+                _swapStorage.Sync(result);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "SwapStorage initialization failed");
+            }
+        }
+
+        public async Task UpdateSingleTokenInStorageAsync(string tokenAddress, string network)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(tokenAddress) || string.IsNullOrWhiteSpace(network))
+                    return;
+
+                var token = _availableTokenDatas.FirstOrDefault(t =>
+                    t.CanSwap &&
+                    t.Address == tokenAddress &&
+                    t.Network == network);
+
+                if (token == null)
+                {
+                    _logger.LogWarning("Token not found for update: {Symbol} - {Network}", tokenAddress, network);
+                    return;
+                }
+
+                decimal balance = 0;
+
+
+                switch (token.Network)
+                {
+                    case "TRC20":
+                        var trc20 = await _blockChainService
+                            .GetTRC20ContractBalancesTronScanAsync(new List<string> { token.Name });
+
+                        trc20.TryGetValue(token.Name, out balance);
+                        break;
+
+                    case "BEP20":
+                        var bep20 = await _blockChainService
+                            .GetBep20SwapContractBalancesAsync(new List<string> { token.Name });
+
+                        bep20.TryGetValue(token.Name, out balance);
+                        break;
+
+                    case "ERC20":
+                        var erc20 = await _blockChainService
+                            .GetERC20SwapContractBalancesAsync(new List<string> { token.Name });
+
+                        erc20.TryGetValue(token.Name, out balance);
+                        break;
+
+                    default:
+                        _logger.LogWarning("Unsupported network: {Network}", token.Network);
+                        return;
+                }
+
+                var key = token.Address;
+
+                var data = new SwapData
+                {
+                    Name = token.Name,
+                    Symbol = token.Name,
+                    Network = token.Network,
+                    ContractBalance = balance,
+                    MinSwapAmount = token.MinSwapAmount,
+                    MaxSwapAmount = token.MaxSwapAmount,
+                    LastUpdated = DateTime.UtcNow
+                };
+
+                _swapStorage.Upsert(key, data);
+
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "UpdateSingleAsync failed for {Symbol} - {Network}", tokenAddress, network);
+            }
+        }
+
+
+
+        #region Private Methods
         private AvailableTokenData GetTokenWithAddressAndNetwork(string tokenAddress, string network = null)
         {
             if (tokenAddress == null)
@@ -319,9 +525,6 @@ namespace CoinBank.Services._Swap
             }
         }
 
-
-        #region Validation Methods
-
         private void ValidateDifferentTokens(CreateSwapUpdate update)
         {
             if (update.SourceSymbol.Equals(update.DestinationToken, StringComparison.OrdinalIgnoreCase)
@@ -331,7 +534,108 @@ namespace CoinBank.Services._Swap
             }
         }
 
-        private AvailableTokenData ValidateTokenInNetwork(string network, string token)
+        private async Task ValidateBalancesForSwapAsync(CreateSwapUpdate update, string userWallet)
+        {
+            if (string.IsNullOrWhiteSpace(userWallet))
+                throw new Exception("User wallet is required");
+
+            var sourceToken = _availableTokenDatas.FirstOrDefault(t =>
+                t.Name == update.SourceSymbol && t.Network == update.SourceNetwork);
+
+            var destinationToken = _availableTokenDatas.FirstOrDefault(t =>
+                t.Name == update.DestinationToken && t.Network == update.DestinationNetwork);
+
+            if (sourceToken == null)
+                throw new Exception("Source token not supported");
+
+            if (destinationToken == null)
+                throw new Exception("Destination token not supported");
+
+            decimal userBalance = 0;
+
+            if (sourceToken.Network == "TRC20" && sourceToken.Name == "USDT")
+            {
+                userBalance = await _blockChainService.GetTRC20UsdtBalanceAsync(userWallet);
+            }
+            else if (sourceToken.Network == "BEP20")
+            {
+                userBalance = await _blockChainService
+                    .GetBEP20WalletAddressSingleTokenBalanceAsync(userWallet, sourceToken.Name);
+            }
+            else if (sourceToken.Network == "ERC20" && sourceToken.Name == "USDT")
+            {
+                userBalance = await _blockChainService
+                    .GetERC20WalletAddressSingleTokenBalanceAsync(userWallet, sourceToken.Name);
+            }
+            else
+            {
+                throw new Exception("Unsupported network for source token");
+            }
+
+            if (userBalance < update.SourceTokenAmount)
+                throw new Exception("Insufficient balance");
+
+
+            var sourcePrice = await _priceService.GetOneTokenPriceForInternalUsageAsync(sourceToken.Name);
+            var destinationPrice = await _priceService.GetOneTokenPriceForInternalUsageAsync(destinationToken.Name);
+
+            if (sourcePrice <= 0 || destinationPrice <= 0)
+                throw new Exception("Price error");
+
+            var destinationAmount = (update.SourceTokenAmount * sourcePrice) / destinationPrice;
+
+
+            decimal contractBalance = 0;
+            bool hasCached = false;
+
+
+
+            if (_swapStorage.TryGetSwap(destinationToken.Name, out var cached))
+            {
+                contractBalance = cached.ContractBalance;
+                hasCached = true;
+            }
+
+
+
+            if (!hasCached || contractBalance < destinationAmount)
+            {
+                Dictionary<string, decimal> contractBalances;
+
+                if (destinationToken.Network == "TRC20")
+                {
+                    contractBalances = await _blockChainService.GetTRC20ContractBalancesTronScanAsync(
+                        new List<string> { destinationToken.Name });
+                }
+                else if (destinationToken.Network == "BEP20")
+                {
+                    contractBalances = await _blockChainService.GetBep20SwapContractBalancesAsync(
+                        new List<string> { destinationToken.Name });
+                }
+                else if (destinationToken.Network == "ERC20")
+                {
+                    contractBalances = await _blockChainService.GetERC20SwapContractBalancesAsync(
+                        new List<string> { destinationToken.Name });
+                }
+                else
+                {
+                    throw new Exception("Unsupported destination network");
+                }
+
+                if (!contractBalances.TryGetValue(destinationToken.Name, out contractBalance))
+                    throw new Exception("Destination token liquidity not found");
+
+
+                _swapStorage.UpdateContractBalance(destinationToken.Address, contractBalance);
+
+            }
+
+            if (contractBalance < destinationAmount)
+                throw new Exception("Insufficient liquidity");
+        }
+
+
+        private AvailableTokenData GetAndValidateSwappableToken(string network, string token, decimal? amount = null)
         {
             var tokenData = _availableTokenDatas.FirstOrDefault(q => q.Name == token.ToUpper() && q.Network == network.ToUpper());
 
@@ -339,10 +643,20 @@ namespace CoinBank.Services._Swap
 
             if (tokenData == null)
                 throw new BadRequestException($"Token  {token} In Network '{network}' is not supported.");
+
+            if (amount.HasValue)
+            {
+                if (amount.Value < tokenData.MinSwapAmount)
+                    throw new BadRequestException(
+                        $"Minimum swap amount for {token} on {network} is {tokenData.MinSwapAmount}.");
+
+                if (amount.Value > tokenData.MaxSwapAmount)
+                    throw new BadRequestException(
+                        $"Maximum swap amount for {token} on {network} is {tokenData.MaxSwapAmount}.");
+            }
+
             return tokenData;
         }
-
-        #endregion
 
         private SwapResult ConvertToSwapResult(Swap swap)
         {
@@ -375,7 +689,88 @@ namespace CoinBank.Services._Swap
             };
         }
 
-
-
+        #endregion
     }
 }
+
+
+//public async Task AddTransactionToSwapAsync(AddTransactionToSwapUpdate update)
+//{
+//    if (update == null || string.IsNullOrWhiteSpace(update.SwapReference))
+//        return;
+
+//    var swap = await _swapRepository.AsQueryable()
+//        .FirstOrDefaultAsync(q => q.SwapReference == update.SwapReference);
+
+//    if (swap == null) return;
+
+//    var tokenData = GetTokenWithAddressAndNetwork(update.TokenAddress, update.Network);
+//    var tokenAmount = _blockChainService.ConvertFromWei(update.Amount, tokenData.PriceDecimalPlaces);
+
+//    var transaction = new SwapTransaction
+//    {
+//        CreateMoment = DateTime.UtcNow,
+//        Hash = update.Hash,
+//        Network = update.Network,
+//        Symbol = tokenData.Name,
+//        Amount = tokenAmount,
+//        Type = update.Type
+//    };
+
+//    var newState = update.Type switch
+//    {
+//        SwapTransactionType.Init => SwapState.Pending,
+//        SwapTransactionType.Execute => SwapState.Completed,
+//        SwapTransactionType.Failed => SwapState.Failed,
+//        _ => swap.State
+//    };
+
+//    var filter = Builders<Swap>.Filter.Eq(x => x.SwapReference, update.SwapReference);
+
+//    var updateDefinition = Builders<Swap>.Update
+//        .Push(x => x.Transactions, transaction)
+//        .Set(x => x.State, newState);
+
+
+//    await _swapRepository.FindOneAndUpdateAsync(filter, updateDefinition);
+
+//    if (update.Type == SwapTransactionType.Execute)
+//    {
+//        var amountFilter = Builders<Swap>.Filter.And(
+//            filter,
+//            Builders<Swap>.Filter.Lt(x => x.DestinationAmount, tokenAmount)
+//        );
+
+//        await _swapRepository.FindOneAndUpdateAsync(
+//            amountFilter,
+//            Builders<Swap>.Update.Set(x => x.DestinationAmount, tokenAmount)
+//        );
+//    }
+
+
+//    string message = update.Type switch
+//    {
+//        SwapTransactionType.Init =>
+//            $"Swap started: {swap.SourceAmount} {swap.SourceSymbol} → {swap.DestinationSymbol}.",
+
+//        SwapTransactionType.Execute =>
+//            $"Swap completed: You received {swap.DestinationAmount} {swap.DestinationSymbol}.",
+
+//        SwapTransactionType.Failed =>
+//            $"Swap failed: {swap.SourceSymbol} → {swap.DestinationSymbol}. Please try again.",
+
+//        _ => "Swap status updated."
+//    };
+
+//    try
+//    {
+//        await _hubContext.Clients.Group(swap.WalletAddress)
+//            .SendAsync("SwapMessage", message);
+//    }
+//    catch (Exception ex)
+//    {
+//        _logger.LogError(ex,
+//            "Failed to send Swap notification for SwapReference {SwapReference}",
+//            update.SwapReference);
+//    }
+//}

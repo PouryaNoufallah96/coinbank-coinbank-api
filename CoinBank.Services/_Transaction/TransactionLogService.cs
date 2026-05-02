@@ -52,6 +52,7 @@ namespace CoinBank.Services._Transaction
                     BlockNumber = (decimal)input.BlockNumber,
                     EventType = BlockchainEventType.PreSaleOrderCreate,
                     Status = TransactionStatus.Confirmed,
+                    Network = "BEP20",
 
                     Reference = input.OrderId,
                     TokenAddress = input.Address,
@@ -107,6 +108,7 @@ namespace CoinBank.Services._Transaction
                     BlockNumber = (decimal)input.BlockNumber,
                     EventType = BlockchainEventType.PreSaleReleaseClaimed,
                     Status = TransactionStatus.Confirmed,
+                    Network = "BEP20",
 
                     Reference = input.OrderId,
                     TokenAddress = input.Address,
@@ -184,6 +186,7 @@ namespace CoinBank.Services._Transaction
                     BlockNumber = (decimal)input.BlockNumber,
                     EventType = BlockchainEventType.SwapInitiated,
                     Status = TransactionStatus.Confirmed,
+                    Network = input.Network,
 
                     Reference = input.SwapId,
                     TokenAddress = input.SourceTokenAddress,
@@ -237,6 +240,7 @@ namespace CoinBank.Services._Transaction
                     BlockNumber = (decimal)input.BlockNumber,
                     EventType = BlockchainEventType.SwapExecuted,
                     Status = TransactionStatus.Confirmed,
+                    Network = input.Network,
 
                     Reference = input.SwapId,
                     TokenAddress = input.DestinationTokenAddress,
@@ -291,7 +295,7 @@ namespace CoinBank.Services._Transaction
                     BlockNumber = (decimal)input.BlockNumber,
                     EventType = BlockchainEventType.SwapFailed,
                     Status = TransactionStatus.Failed,
-
+                    Network = input.Network,
                     Reference = input.SwapId,
                     TokenAddress = input.DestinationTokenAddress,
 
@@ -318,12 +322,13 @@ namespace CoinBank.Services._Transaction
             }
         }
 
-        public async Task<BigInteger> GetSwapLastCheckedBlockNumberAsync()
+        public async Task<BigInteger> GetSwapLastCheckedBlockNumberAsync(string network = "BEP20")
         {
+
             var lastBlock = await _transactionLogRepository
                 .AsQueryable()
                 .Where(h =>
-                    h.EventType == BlockchainEventType.SwapInitiated)
+                    h.EventType == BlockchainEventType.SwapInitiated && h.Network == network)
                 //||
                 //    h.EventType == BlockchainEventType.SwapExecuted ||
                 //    h.EventType == BlockchainEventType.SwapFailed)

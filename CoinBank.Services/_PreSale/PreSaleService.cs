@@ -287,7 +287,7 @@ namespace CoinBank.Services._PreSale
 
             var storageList = new List<PreSaleData>();
 
-            var allbalances = await _blockChainService.GetContractBalancesAsync(ContractType.PreSale);
+            var allbalances = await _blockChainService.GetPreSaleContractBalancesAsync();
 
             foreach (var presale in presales)
             {
@@ -337,7 +337,7 @@ namespace CoinBank.Services._PreSale
 
         public async Task SyncPreSaleTokenBalanceAsync(string tokenName)
         {
-            var balance = await _blockChainService.GetContractSingleBalanceAsync(tokenName,ContractType.PreSale);
+            var balance = await _blockChainService.GetPreSaleContractSingleBalanceAsync(tokenName);
             _preSaleStorage.UpdateContractBalance(tokenName, balance);
         }
 

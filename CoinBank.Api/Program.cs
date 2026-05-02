@@ -4,6 +4,7 @@ using CoinBank.Api.Utilities.Configurations;
 using CoinBank.Api.Utilities.Middlewares;
 using CoinBank.Services._PreSale._Hub;
 using CoinBank.Services._Price._Hub;
+using CoinBank.Services._Swap._Hub;
 using CoinBank.Services._Transaction._Hub;
 using System.Text.Json.Serialization;
 using Utilities.Configuration;
@@ -86,5 +87,6 @@ app.UseEndpoints();
 
 app.MapHub<PriceHub>("/hubs/prices");
 app.MapHub<PreSaleHub>("/hubs/presales");
+app.MapHub<SwapHub>("/hubs/swap");
 app.MapHub<WalletNotifyHub>("/hubs/notifywallet");
 app.Run();

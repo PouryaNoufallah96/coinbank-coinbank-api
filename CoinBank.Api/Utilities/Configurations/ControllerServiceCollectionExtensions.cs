@@ -16,7 +16,6 @@ namespace CoinBank.Api.Utilities.Configurations
         {
 
             services.RegisterSetting<AvailableTokensSettings>(configuration.GetSection(nameof(AvailableTokensSettings)));
-            services.RegisterSetting<BlockchainWebSocketSetting>(configuration.GetSection(nameof(BlockchainWebSocketSetting)));
             services.RegisterSetting<BlockChainSettings>(configuration.GetSection(nameof(BlockChainSettings)));
             services.RegisterSetting<StakeSetting>(configuration.GetSection(nameof(StakeSetting)));
             services.RegisterSetting<FileSettings>(configuration.GetSection(nameof(FileSettings)));

@@ -14,7 +14,8 @@ namespace CoinBank.Domain.Collections
         public string Hash { get; set; }
         public string TokenAddress { get; set; }
         public decimal BlockNumber { get; set; }
-        public string Data { get; set; } 
+        public string Data { get; set; }
+        public string Network { get; set; } 
         public BlockchainEventType EventType { get; set; } 
         public TransactionStatus Status { get; set; }
     }

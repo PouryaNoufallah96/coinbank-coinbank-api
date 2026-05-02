@@ -34,7 +34,7 @@ namespace CoinBank.Domain.Collections
         public List<SwapTransaction> Transactions { get; set; } = [];
     }
 
-    public enum SwapState { NotRegistered, Pending, Compelete, Canceled }
+    public enum SwapState { NotRegistered, Pending, Completed, Failed }
 
     public class SwapTransaction
     {

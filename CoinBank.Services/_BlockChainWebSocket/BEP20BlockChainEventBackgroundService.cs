@@ -3,9 +3,9 @@ using CoinBank.Services._BlockChain.DTOs.Settings;
 using CoinBank.Services._BlockChainWebSocket.DTOs;
 using CoinBank.Services._Common.DTOs.Settings;
 using CoinBank.Services._PreSale;
+using CoinBank.Services._Swap;
 using CoinBank.Services._Transaction;
 using CoinBank.Services._Transaction.DTOs.Updates;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Nethereum.Contracts;
@@ -22,55 +22,58 @@ using static Utilities.Constants.RegisterMode;
 
 namespace CoinBank.Services._BlockChainWebSocket
 {
-    public class BlockChainEventBackgroundService : BackgroundService, IHostedDependency
+    public class BEP20BlockChainEventBackgroundService : BackgroundService, IHostedDependency
     {
+        private const string LogPrefix = "[BEP20]";
+
         private readonly BlockChainSettings blockChainSettings;
         private readonly ITransactionLogService _transactionLogService;
         private readonly IPreSaleService _preSaleService;
-        private readonly ILogger<BlockChainEventBackgroundService> _logger;
-        private readonly BlockchainWebSocketSetting _settings;
+        private readonly ILogger<BEP20BlockChainEventBackgroundService> _logger;
+        private readonly AvailableTokensSettings _availableTokensSettings;
+        private readonly ISwapService _swapService;
         private int _reconnectAttempts = 0;
         private DateTime _lastEventReceived = DateTime.UtcNow;
+
         private readonly SemaphoreSlim _reconnectLock = new(1, 1);
-        private bool _isCleaningUp = false;
         private readonly SemaphoreSlim _cleanupLock = new(1, 1);
+        private readonly object _blockLock = new();
+
+        private bool _useSecondaryWsUrl = false;
+        private bool _isDisposed = false;
+
         private IDisposable _preSaleContractEventsSubscription;
         private IDisposable _incomingTransferSubscription;
         private IDisposable _swapContractEventsSubscription;
+
         private BigInteger _swapLastProcessedBlock = 0;
         private BigInteger _preSaleLastProcessedBlock = 0;
 
-        private bool _useSecondaryWsUrl = false;
         private Web3 _web3;
         private StreamingWebSocketClient _webSocketClient;
-        private readonly object _blockLock = new();
-        private bool _isDisposed = false;
-        private readonly AvailableTokensSettings _availableTokensSettings;
 
-
-        public BlockChainEventBackgroundService(
+        public BEP20BlockChainEventBackgroundService(
             BlockChainSettings blockChainSettings,
             ITransactionLogService transactionLogService,
             IPreSaleService preSaleService,
             AvailableTokensSettings availableTokensSettings,
-            ILogger<BlockChainEventBackgroundService> logger,
-            BlockchainWebSocketSetting settings)
+            ISwapService swapService,
+            ILogger<BEP20BlockChainEventBackgroundService> logger)
         {
             this.blockChainSettings = blockChainSettings;
             _transactionLogService = transactionLogService;
             _preSaleService = preSaleService;
-            _logger = logger;
-            _settings = settings;
             _availableTokensSettings = availableTokensSettings;
-            _web3 = new Web3(settings.WsUrl2);
+            _swapService = swapService;
+            _logger = logger;
+
+            _web3 = new Web3(blockChainSettings.BEP20WsUrl2);
         }
+
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            _logger.LogInformation("Blockchain Event Service starting...");
-            _preSaleLastProcessedBlock = await GetPreSaleOrderLastProcessedBlock(stoppingToken);
-            _logger.LogInformation($"PreSale starting block is : {_preSaleLastProcessedBlock}");
-
+           
             while (!stoppingToken.IsCancellationRequested)
             {
                 try
@@ -78,14 +81,14 @@ namespace CoinBank.Services._BlockChainWebSocket
                     await TryConnectWithRetryAsync(stoppingToken);
                     _lastEventReceived = DateTime.UtcNow;
 
-                    _logger.LogInformation("-----------------------Successfully connected and subscribed to blockchain events");
+                    //_logger.LogInformation("{Prefix} Connected to BEP20 blockchain", LogPrefix);
 
                     while (_webSocketClient?.IsStarted == true && !stoppingToken.IsCancellationRequested)
                     {
-                        var now = DateTime.UtcNow;
-                        if ((now - _lastEventReceived).TotalMinutes > 2)
+                        if ((DateTime.UtcNow - _lastEventReceived).TotalMinutes > 2)
                         {
-                            _logger.LogWarning("----------- No blockchain events received in the last 3 minutes {time}. Reconnecting...", now);
+                            //_logger.LogWarning("{Prefix} No BEP20 events received. Reconnecting...", LogPrefix);
+
                             await Task.Delay(2000, stoppingToken);
                             await TryConnectWithRetryAsync(stoppingToken);
 
@@ -95,63 +98,62 @@ namespace CoinBank.Services._BlockChainWebSocket
                         await Task.Delay(TimeSpan.FromSeconds(10), stoppingToken);
                     }
 
-                    if (_webSocketClient != null && !_webSocketClient.IsStarted)
-                    {
-                        _logger.LogWarning("WebSocket stopped unexpectedly, reconnecting...");
-                        await Task.Delay(2000, stoppingToken);
-                    }
+                    await Task.Delay(2000, stoppingToken);
                 }
                 catch (OperationCanceledException)
                 {
-                    _logger.LogInformation("Service shutdown requested");
+                    _logger.LogInformation("{Prefix} Shutdown requested", LogPrefix);
                     break;
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "Unexpected error in blockchain event service");
+                    _logger.LogError(ex, "{Prefix} Unexpected error", LogPrefix);
                     await Task.Delay(5000, stoppingToken);
                 }
             }
 
-            _logger.LogInformation("Blockchain Event Service stopped.");
+            _logger.LogInformation("{Prefix} Service stopped", LogPrefix);
         }
 
         private async Task TryConnectWithRetryAsync(CancellationToken stoppingToken)
         {
             if (!await _reconnectLock.WaitAsync(0, stoppingToken))
-            {
                 return;
-            }
 
             try
             {
                 _reconnectAttempts = 0;
 
                 while (!stoppingToken.IsCancellationRequested &&
-                       _reconnectAttempts < _settings.MaxReconnectAttempts)
+                       _reconnectAttempts < blockChainSettings.MaxReconnectAttempts)
                 {
                     try
                     {
-                        _logger.LogInformation($"Attempting to connect (Attempt {_reconnectAttempts + 1}/{_settings.MaxReconnectAttempts})");
+                        _logger.LogInformation("{Prefix} Connecting attempt {Attempt}/{Max}",
+                            LogPrefix,
+                            _reconnectAttempts + 1,
+                            blockChainSettings.MaxReconnectAttempts);
+
                         await ConnectAndSubscribe(stoppingToken);
 
                         _reconnectAttempts = 0;
                         return;
                     }
-                    catch (Exception ex) when (ex is not OperationCanceledException)
+                    catch (Exception ex)
                     {
                         _reconnectAttempts++;
-                        _logger.LogWarning(ex, "Connection attempt failed. Will retry...");
+
+                        _logger.LogWarning(ex,
+                            "{Prefix} Connection failed, retrying...",
+                            LogPrefix);
+
                         await Task.Delay(CalculateReconnectDelay(), stoppingToken);
                     }
                 }
 
-                if (_reconnectAttempts >= _settings.MaxReconnectAttempts)
-                {
-                    _logger.LogCritical("Max reconnection attempts reached. Waiting before next try...");
-                    await Task.Delay(30000, stoppingToken);
-                    _reconnectAttempts = 0;
-                }
+                _logger.LogCritical("{Prefix} Max reconnect attempts reached", LogPrefix);
+                await Task.Delay(30000, stoppingToken);
+                _reconnectAttempts = 0;
             }
             finally
             {
@@ -159,40 +161,33 @@ namespace CoinBank.Services._BlockChainWebSocket
             }
         }
 
+
         private TimeSpan CalculateReconnectDelay()
         {
             double delaySeconds = Math.Min(
-                Math.Pow(2, _reconnectAttempts) * _settings.ReconnectInterval,
+                Math.Pow(2, _reconnectAttempts) * blockChainSettings.ReconnectInterval,
                 300);
             return TimeSpan.FromSeconds(delaySeconds);
         }
 
         private async Task ConnectAndSubscribe(CancellationToken cancellationToken)
         {
-            _logger.LogInformation("...........ConnectAndSubscribe touched............");
+            _logger.LogInformation("{Prefix} Connecting WebSocket...", LogPrefix);
 
             await CleanupConnection();
 
-            var currestWsUrl = GetCurrentWsUrl();
-            _webSocketClient = new StreamingWebSocketClient(currestWsUrl);
-            _web3 = new Web3(currestWsUrl);
+            var url = GetCurrentWsUrl();
 
+            _webSocketClient = new StreamingWebSocketClient(url);
+            _web3 = new Web3(url);
 
-            try
-            {
-                await _webSocketClient.StartAsync();
+            await _webSocketClient.StartAsync();
 
-                await SubscribeToPreSaleContractEventsAsync(cancellationToken);
+            await SubscribeToPreSaleContractEventsAsync(cancellationToken);
+            await SubscribeToSwapContractEventsAsync(cancellationToken);
+            await SubscribeToIncomingTransfersAsync(cancellationToken);
 
-                await SubscribeToIncomingTransfersAsync(cancellationToken);
-
-                _logger.LogInformation("ContractEvents subscription is active.");
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error connecting/subscribing. Will reconnect...");
-                throw;
-            }
+            _logger.LogInformation("{Prefix} Subscriptions active", LogPrefix);
         }
 
         private async Task CleanupConnection()
@@ -209,8 +204,10 @@ namespace CoinBank.Services._BlockChainWebSocket
 
                 _preSaleContractEventsSubscription?.Dispose();
                 _incomingTransferSubscription?.Dispose();
+                _swapContractEventsSubscription?.Dispose();
                 _preSaleContractEventsSubscription = null;
                 _incomingTransferSubscription = null;
+                _swapContractEventsSubscription = null;
 
                 if (_webSocketClient != null)
                 {
@@ -257,12 +254,11 @@ namespace CoinBank.Services._BlockChainWebSocket
 
         private string GetCurrentWsUrl()
         {
-            var wss = _useSecondaryWsUrl ? _settings.WsUrl : _settings.WsUrl2;
+            var wss = _useSecondaryWsUrl ? blockChainSettings.BEP20WsUrl : blockChainSettings.BEP20WsUrl2;
             _useSecondaryWsUrl = !_useSecondaryWsUrl;
             _logger.LogInformation("WebSocket URL : {Url}", wss);
             return wss;
         }
-
 
 
         #region PreSaleSide
@@ -271,7 +267,7 @@ namespace CoinBank.Services._BlockChainWebSocket
             var subscription = new EthLogsObservableSubscription(_webSocketClient);
 
             var safeObservable = subscription.GetSubscriptionDataResponsesAsObservable()
-           .Where(log => log.Address.IsTheSameAddress(_settings.PreSaleContractAddress))
+           .Where(log => log.Address.IsTheSameAddress(blockChainSettings.PreSaleContractAddress))
            .Select(log => Observable.FromAsync(() => PreSaleProcessContractEventLogAsync(log, cancellationToken)))
            .Concat();
 
@@ -288,63 +284,20 @@ namespace CoinBank.Services._BlockChainWebSocket
 
             var filter = new NewFilterInput
             {
-                Address = new[] { _settings.PreSaleContractAddress },
+                Address = new[] { blockChainSettings.PreSaleContractAddress },
                 FromBlock = new BlockParameter(await GetPreSaleOrderLastProcessedBlock(cancellationToken))
             };
 
             await subscription.SubscribeAsync(filter);
         }
 
-        private async Task<HexBigInteger> GetPreSaleOrderLastProcessedBlock(CancellationToken cancellationToken)
-        {
-            try
-            {
-                lock (_blockLock)
-                {
-                    if (_preSaleLastProcessedBlock > 0)
-                        return _preSaleLastProcessedBlock.ToHexBigInteger();
-                }
-
-                var lastDbBlock = await _transactionLogService.GetPreSaleOrderLastCheckedBlockNumberAsync();
-
-                lock (_blockLock)
-                {
-                    _preSaleLastProcessedBlock = lastDbBlock;
-                }
-
-                if (_preSaleLastProcessedBlock > 0)
-                    return _preSaleLastProcessedBlock.ToHexBigInteger();
-
-                try
-                {
-                    var _web3Client = new Web3(blockChainSettings.RpcUrl);
-
-                    var latestBlockNumber = await _web3Client.Eth.Blocks.GetBlockNumber.SendRequestAsync();
-                    lock (_blockLock)
-                    {
-                        _preSaleLastProcessedBlock = latestBlockNumber;
-                        return latestBlockNumber;
-                    }
-
-                }
-                catch (Exception e)
-                {
-                    _logger.LogError(e.Message);
-                    throw;
-                }
-
-            }
-            catch (Exception e)
-            {
-                SentrySdk.CaptureException(e);
-                throw;
-            }
-        }
 
         private async Task PreSaleProcessContractEventLogAsync(FilterLog log, CancellationToken cancellationToken)
         {
             try
             {
+                _lastEventReceived = DateTime.UtcNow;
+
                 var preSaleOrderRegisteredEvent = log.DecodeEvent<PurchasedEventDTO>();
                 if (preSaleOrderRegisteredEvent != null)
                 {
@@ -439,6 +392,52 @@ namespace CoinBank.Services._BlockChainWebSocket
                 _preSaleLastProcessedBlock = BigInteger.Max(_preSaleLastProcessedBlock, log.BlockNumber.Value + 1);
             }
         }
+      
+        private async Task<HexBigInteger> GetPreSaleOrderLastProcessedBlock(CancellationToken cancellationToken)
+        {
+            try
+            {
+                lock (_blockLock)
+                {
+                    if (_preSaleLastProcessedBlock > 0)
+                        return _preSaleLastProcessedBlock.ToHexBigInteger();
+                }
+
+                var lastDbBlock = await _transactionLogService.GetPreSaleOrderLastCheckedBlockNumberAsync();
+
+                lock (_blockLock)
+                {
+                    _preSaleLastProcessedBlock = lastDbBlock;
+                }
+
+                if (_preSaleLastProcessedBlock > 0)
+                    return _preSaleLastProcessedBlock.ToHexBigInteger();
+
+                try
+                {
+                    var _web3Client = new Web3(blockChainSettings.BEP20RpcUrl);
+                    var latestBlockNumber = await _web3Client.Eth.Blocks.GetBlockNumber.SendRequestAsync();
+
+                    lock (_blockLock)
+                    {
+                        _swapLastProcessedBlock = latestBlockNumber;
+                        return latestBlockNumber;
+                    }
+
+                }
+                catch (Exception e)
+                {
+                    _logger.LogError(e.Message);
+                    throw;
+                }
+
+            }
+            catch (Exception e)
+            {
+                SentrySdk.CaptureException(e);
+                throw;
+            }
+        }
 
         #endregion
 
@@ -446,82 +445,67 @@ namespace CoinBank.Services._BlockChainWebSocket
 
         #region Swap
 
-
         private async Task SubscribeToSwapContractEventsAsync(CancellationToken cancellationToken)
         {
             var subscription = new EthLogsObservableSubscription(_webSocketClient);
 
-            var swapContracts = new[]
+            var contracts = new[]
             {
-                blockChainSettings.ERC20SwapContractAddress,
-                blockChainSettings.BEP20SwapContractAddress,
-                blockChainSettings.TRC20SwapContractAddress
+                blockChainSettings.BEP20SwapContractAddress
             };
 
-            var safeObservable = subscription.GetSubscriptionDataResponsesAsObservable()
-                .Where(log => swapContracts.Any(c => log.Address.IsTheSameAddress(c)))
-                .Select(log => Observable.FromAsync(() => SwapProcessContractEventLogAsync(log, cancellationToken)))
+            var observable = subscription.GetSubscriptionDataResponsesAsObservable()
+                .Where(log => contracts.Any(c => log.Address.IsTheSameAddress(c)))
+                .Select(log => Observable.FromAsync(() =>
+                    SwapProcessContractEventLogAsync(log, cancellationToken)))
                 .Concat();
 
-            _swapContractEventsSubscription = safeObservable.Subscribe(
+            _swapContractEventsSubscription = observable.Subscribe(
                 _ => { },
-                async ex =>
-                {
-                    _logger.LogError(ex, "Error in swap subscription. Reconnecting...");
-                    _ = Task.Run(async () => await TryConnectWithRetryAsync(cancellationToken));
-                },
-                () =>
-                {
-                    _logger.LogWarning("Swap subscription completed unexpectedly. Reconnecting...");
-                    _ = Task.Run(async () => await TryConnectWithRetryAsync(cancellationToken));
-                });
+                ex => _logger.LogError(ex, "{Prefix} Swap subscription error", LogPrefix),
+                () => _logger.LogWarning("{Prefix} Swap subscription closed", LogPrefix)
+            );
 
-            var filter = new NewFilterInput
+            await subscription.SubscribeAsync(new NewFilterInput
             {
-                Address = swapContracts,
-                FromBlock = new BlockParameter(await GetSwapLastProcessedBlock(cancellationToken))
-            };
-
-            await subscription.SubscribeAsync(filter);
+                Address = contracts,
+                FromBlock = new BlockParameter(
+                    await GetSwapLastProcessedBlock(cancellationToken))
+            });
         }
-
-
-
-
 
         private async Task SwapProcessContractEventLogAsync(FilterLog log, CancellationToken cancellationToken)
         {
             try
             {
-                var network = ResolveNetworkFromAddress(log.Address);
+                _lastEventReceived = DateTime.UtcNow;
 
-                var initiatedEvent = log.DecodeEvent<SwapInitiatedEventDTO>();
-                if (initiatedEvent != null)
+                var initiated = log.DecodeEvent<SwapInitiatedEventDTO>();
+                if (initiated != null)
                 {
-                    await HandleSwapInitiated(log, initiatedEvent, network);
+                    await HandleSwapInitiated(log, initiated, "BEP20");
                     return;
                 }
 
-                var executedEvent = log.DecodeEvent<SwapExecutedEventDTO>();
-                if (executedEvent != null)
+                var executed = log.DecodeEvent<SwapExecutedEventDTO>();
+                if (executed != null)
                 {
-                    await HandleSwapExecuted(log, executedEvent, network);
+                    await HandleSwapExecuted(log, executed, "BEP20");
                     return;
                 }
 
-                var failedEvent = log.DecodeEvent<SwapFailedEventDTO>();
-                if (failedEvent != null)
+                var failed = log.DecodeEvent<SwapFailedEventDTO>();
+                if (failed != null)
                 {
-                    await HandleSwapFailed(log, failedEvent, network);
+                    await HandleSwapFailed(log, failed, "BEP20");
                     return;
                 }
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error decoding swap event");
+                _logger.LogError(ex, "{Prefix} Swap decode error", LogPrefix);
             }
         }
-
 
         private async Task HandleSwapInitiated(FilterLog log, EventLog<SwapInitiatedEventDTO> ev, string network)
         {
@@ -603,21 +587,6 @@ namespace CoinBank.Services._BlockChainWebSocket
             }
         }
 
-        private string ResolveNetworkFromAddress(string contractAddress)
-        {
-            if (contractAddress.IsTheSameAddress(blockChainSettings.ERC20SwapContractAddress))
-                return "ERC20";
-
-            if (contractAddress.IsTheSameAddress(blockChainSettings.BEP20SwapContractAddress))
-                return "BEP20";
-
-            if (contractAddress.IsTheSameAddress(blockChainSettings.TRC20SwapContractAddress))
-                return "TRC20";
-
-            return "UNKNOWN";
-        }
-
-
         private async Task<HexBigInteger> GetSwapLastProcessedBlock(CancellationToken cancellationToken)
         {
             try
@@ -628,7 +597,7 @@ namespace CoinBank.Services._BlockChainWebSocket
                         return _swapLastProcessedBlock.ToHexBigInteger();
                 }
 
-                var lastDbBlock = await _transactionLogService.GetSwapLastCheckedBlockNumberAsync();
+                var lastDbBlock = await _transactionLogService.GetSwapLastCheckedBlockNumberAsync("BEP20");
 
                 lock (_blockLock)
                 {
@@ -638,14 +607,14 @@ namespace CoinBank.Services._BlockChainWebSocket
                 if (_swapLastProcessedBlock > 0)
                     return _swapLastProcessedBlock.ToHexBigInteger();
 
-                var latestBlockNumber = await _web3.Eth.Blocks.GetBlockNumber.SendRequestAsync();
+                var _web3Client = new Web3(blockChainSettings.BEP20RpcUrl);
+                var latestBlockNumber = await _web3Client.Eth.Blocks.GetBlockNumber.SendRequestAsync();
 
                 lock (_blockLock)
                 {
                     _swapLastProcessedBlock = latestBlockNumber;
+                    return latestBlockNumber;
                 }
-
-                return latestBlockNumber;
             }
             catch (Exception e)
             {
@@ -653,13 +622,8 @@ namespace CoinBank.Services._BlockChainWebSocket
                 throw;
             }
         }
+
         #endregion
-
-
-
-
-
-
 
 
         #region TrasferSide
@@ -678,9 +642,9 @@ namespace CoinBank.Services._BlockChainWebSocket
 
             var contractAddresses = new List<string>
             {
-                _settings.SwapContractAddress,
-                _settings.PreSaleContractAddress,
-                _settings.StakeContractAddress
+                blockChainSettings.BEP20SwapContractAddress,
+                blockChainSettings.PreSaleContractAddress,
+                blockChainSettings.StakeContractAddress
             };
 
 
@@ -689,12 +653,12 @@ namespace CoinBank.Services._BlockChainWebSocket
                 async ex =>
                 {
                     _logger.LogError(ex, "Error in incoming transfer subscription. Reconnecting...");
-                    _ = Task.Run(async () => await TryConnectWithRetryAsync(cancellationToken));
+                    //_ = Task.Run(async () => await TryConnectWithRetryAsync(cancellationToken));
                 },
                 () =>
                 {
                     _logger.LogWarning("Incoming transfer subscription completed unexpectedly. Reconnecting...");
-                    _ = Task.Run(async () => await TryConnectWithRetryAsync(cancellationToken));
+                    //_ = Task.Run(async () => await TryConnectWithRetryAsync(cancellationToken));
                 });
 
             var filter = new NewFilterInput
@@ -709,6 +673,8 @@ namespace CoinBank.Services._BlockChainWebSocket
         {
             try
             {
+                _lastEventReceived = DateTime.UtcNow;
+
                 var transferEvent = log.DecodeEvent<TransferEventDTO>();
                 if (transferEvent == null) return;
 
@@ -723,20 +689,19 @@ namespace CoinBank.Services._BlockChainWebSocket
 
                 var amount = Web3.Convert.FromWei(transferEvent.Event.Value);
 
-                if (to.IsTheSameAddress(_settings.PreSaleContractAddress))
+                if (to.IsTheSameAddress(blockChainSettings.PreSaleContractAddress))
                 {
 
                     _logger.LogInformation("PreSale Side {Token} Transfer: {Amount} from {From}", token.Name, amount, transferEvent.Event.From);
                     await _preSaleService.SyncPreSaleTokenBalanceAsync(token.Name.ToUpper());
 
                 }
-                else if (to.IsTheSameAddress(_settings.SwapContractAddress))
+                else if (to.IsTheSameAddress(blockChainSettings.BEP20SwapContractAddress))
                 {
                     _logger.LogInformation("Swap Side: {Token} {Amount} from {From}", token.Name, amount, transferEvent.Event.From);
-                    //TODO : complete
-
+                    await _swapService.UpdateSingleTokenInStorageAsync(token.Address, token.Network);
                 }
-                else if (to.IsTheSameAddress(_settings.StakeContractAddress))
+                else if (to.IsTheSameAddress(blockChainSettings.StakeContractAddress))
                 {
                     _logger.LogInformation("Stake Side : {Token} {Amount} from {From}", token.Name, amount, transferEvent.Event.From);
                     //TODO : complete
@@ -751,55 +716,6 @@ namespace CoinBank.Services._BlockChainWebSocket
         #endregion
 
 
-
-        private async Task<HexBigInteger> GetLastProcessedBlock(CancellationToken cancellationToken)
-        {
-
-            try
-            {
-
-
-                lock (_blockLock)
-                {
-                    if (_preSaleLastProcessedBlock > 0)
-                        return _preSaleLastProcessedBlock.ToHexBigInteger();
-                }
-
-                var lastDbBlock = await _transactionLogService.GetLastCheckedBlockNumberAsync();
-
-                lock (_blockLock)
-                {
-                    _preSaleLastProcessedBlock = lastDbBlock;
-                }
-
-                if (_preSaleLastProcessedBlock > 0)
-                    return _preSaleLastProcessedBlock.ToHexBigInteger();
-
-                try
-                {
-                    var _web3Client = new Web3(blockChainSettings.RpcUrl);
-
-                    var latestBlockNumber = await _web3Client.Eth.Blocks.GetBlockNumber.SendRequestAsync();
-                    lock (_blockLock)
-                    {
-                        _preSaleLastProcessedBlock = latestBlockNumber;
-                        return latestBlockNumber;
-                    }
-
-                }
-                catch (Exception e)
-                {
-                    _logger.LogError(e.Message);
-                    throw;
-                }
-
-            }
-            catch (Exception e)
-            {
-                SentrySdk.CaptureException(e);
-                throw;
-            }
-        }
 
         private static string ByteArray32ToHex(byte[] bytes)
         {
@@ -828,12 +744,14 @@ namespace CoinBank.Services._BlockChainWebSocket
                 await base.StopAsync(cancellationToken);
             }
         }
-       
+
         public void Dispose()
         {
             if (!_isDisposed)
             {
                 _preSaleContractEventsSubscription?.Dispose();
+                _swapContractEventsSubscription?.Dispose();
+                _incomingTransferSubscription?.Dispose();
                 _webSocketClient?.Dispose();
                 _reconnectLock?.Dispose();
                 _cleanupLock?.Dispose();

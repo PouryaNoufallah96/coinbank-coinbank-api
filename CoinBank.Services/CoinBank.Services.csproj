@@ -29,7 +29,6 @@
 
 	<ItemGroup>
 	  <Folder Include="_Price\DTOs\Updates\" />
-	  <Folder Include="_Swap\_Hub\" />
 	</ItemGroup>
 
 </Project>
