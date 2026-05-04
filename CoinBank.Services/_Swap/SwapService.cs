@@ -12,6 +12,7 @@ using Microsoft.AspNetCore.SignalR;
 using Microsoft.CodeAnalysis;
 using Microsoft.Extensions.Logging;
 using Microsoft.IdentityModel.Tokens;
+using MongoDB.Bson;
 using MongoDB.Driver;
 using MongoDB.Driver.Linq;
 using Utilities.Exceptions.Common;
@@ -41,8 +42,8 @@ namespace CoinBank.Services._Swap
             #region Source
             var swapReference = IdGenerartor.GenerateBytes32HexId();
             var estEid = _blockChainService.MapNetworkToEid(update.SourceNetwork);
-            var sourceNetwork = update.SourceNetwork;
-            var sourceSymbol = update.SourceSymbol;
+            var sourceNetwork = update.SourceNetwork.ToUpper();
+            var sourceSymbol = update.SourceSymbol.ToUpper();
             var sourceTokenAddress = sourceTokenData.Address;
             var sourceTokenPrice = await _priceService.GetOneTokenPriceForInternalUsageAsync(sourceSymbol);
             var sourceAmount = update.SourceTokenAmount;
@@ -51,8 +52,8 @@ namespace CoinBank.Services._Swap
             #endregion
 
             #region Destination
-            var destinationNetwork = update.DestinationNetwork;
-            var destinationSymbol = update.DestinationToken;
+            var destinationNetwork = update.DestinationNetwork.ToUpper();
+            var destinationSymbol = update.DestinationToken.ToUpper();
             var destinationTokenAddress = destinationTokenData.Address;
             var destinationWallet = update.DestinationWallet;
             var destinationTokenPrice = await _priceService.GetOneTokenPriceForInternalUsageAsync(destinationSymbol);
@@ -62,11 +63,11 @@ namespace CoinBank.Services._Swap
             {
                 SwapReference = swapReference,
                 DstEid = estEid,
-                DestinationNetwork = update.DestinationNetwork,
-                SourceTokenAddress = sourceTokenAddress,
-                DestinationTokenAddress = destinationTokenAddress,
-                SourceAmoutInWei = sourceAmountInWei,
                 SourceNetwork = sourceNetwork,
+                SourceTokenAddress = sourceTokenAddress,
+                SourceAmoutInWei = sourceAmountInWei,
+                DestinationNetwork = destinationNetwork,
+                DestinationTokenAddress = destinationTokenAddress,
                 DestinationWallet = destinationWallet,
             });
 
@@ -76,6 +77,7 @@ namespace CoinBank.Services._Swap
                 SourceTokenAddress = sourceTokenAddress,
                 SourceAmountInWei = sourceAmountInWei
             });
+
             var destinationAmount = _blockChainService.ConvertFromWei(destinationTokenOutAmountInWei, destinationTokenData.PriceDecimalPlaces);
 
             var swap = new Swap
@@ -270,9 +272,19 @@ namespace CoinBank.Services._Swap
         public async Task AddTransactionToSwapAsync(AddTransactionToSwapUpdate update)
         {
             if (update == null || string.IsNullOrWhiteSpace(update.SwapReference))
+            {
+                _logger.LogWarning("Invalid update payload.");
                 return;
+            }
 
             var tokenData = GetTokenWithAddressAndNetwork(update.TokenAddress, update.Network);
+            if (tokenData == null)
+            {
+                _logger.LogWarning("Token not found. TokenAddress: {TokenAddress}, Network: {Network}",
+                    update.TokenAddress, update.Network);
+                return;
+            }
+
             var tokenAmount = _blockChainService.ConvertFromWei(update.Amount, tokenData.PriceDecimalPlaces);
 
             var transaction = new SwapTransaction
@@ -285,75 +297,52 @@ namespace CoinBank.Services._Swap
                 Type = update.Type
             };
 
-            var baseFilter = Builders<Swap>.Filter.Eq(x => x.SwapReference, update.SwapReference);
+            var filter = Builders<Swap>.Filter.And(
+                Builders<Swap>.Filter.Eq(x => x.SwapReference, update.SwapReference),
+                Builders<Swap>.Filter.Not(
+                    Builders<Swap>.Filter.ElemMatch(x => x.Transactions, t => t.Type == update.Type)
+                )
+            );
 
-            var newState = update.Type switch
-            {
-                SwapTransactionType.Init => SwapState.Pending,
-                SwapTransactionType.Execute => SwapState.Completed,
-                SwapTransactionType.Failed => SwapState.Failed,
-                _ => (SwapState?)null
-            };
-
-            var updateBuilder = Builders<Swap>.Update
-                .Push(x => x.Transactions, transaction);
-
-            if (newState.HasValue)
-                updateBuilder = updateBuilder.Set(x => x.State, newState.Value);
-
-            FilterDefinition<Swap> finalFilter = baseFilter;
-
-            if (update.Type == SwapTransactionType.Execute)
-            {
-                var amountFilter = Builders<Swap>.Filter.Lt(x => x.DestinationAmount, tokenAmount);
-                finalFilter = Builders<Swap>.Filter.And(baseFilter, amountFilter);
-
-                updateBuilder = updateBuilder.Set(x => x.DestinationAmount, tokenAmount);
-            }
+            var updateDef = Builders<Swap>.Update.Push(x => x.Transactions, transaction);
 
             var options = new FindOneAndUpdateOptions<Swap>
             {
                 ReturnDocument = ReturnDocument.After
             };
 
-            var updatedSwap = await _swapRepository.FindOneAndUpdateWithOptionAsync(finalFilter, updateBuilder, options);
+            var swap = await _swapRepository.FindOneAndUpdateWithOptionAsync(filter, updateDef, options);
 
-            if (updatedSwap == null && update.Type == SwapTransactionType.Execute)
+          
+            if (swap == null)
             {
-                updatedSwap = await _swapRepository.FindOneAndUpdateWithOptionAsync(
-                    baseFilter,
-                    Builders<Swap>.Update
-                        .Push(x => x.Transactions, transaction)
-                        .Set(x => x.State, SwapState.Completed),
-                    options
-                );
-            }
+                //var existingSwap = await _swapRepository.AsQueryable()
+                //     .FirstOrDefaultAsync(x => x.SwapReference == update.SwapReference);
 
-            if (updatedSwap == null)
+                //if (existingSwap == null)
+                //{
+                //    _logger.LogWarning(
+                //        "Swap not found while adding transaction. SwapReference: {SwapReference}, Type: {Type}",
+                //        update.SwapReference,
+                //        update.Type
+                //    );
+                //    return;
+                //}
+                _logger.LogInformation(
+                   "Duplicate transaction ignored. SwapReference: {SwapReference}, Type: {Type}",
+                   update.SwapReference,
+                   update.Type
+               );
                 return;
-
-            string message = update.Type switch
-            {
-                SwapTransactionType.Init =>
-                    $"Swap started: {updatedSwap.SourceAmount} {updatedSwap.SourceSymbol} → {updatedSwap.DestinationSymbol}.",
-
-                SwapTransactionType.Execute =>
-                    $"Swap completed: You received {updatedSwap.DestinationAmount} {updatedSwap.DestinationSymbol}.",
-
-                SwapTransactionType.Failed =>
-                    $"Swap failed: {updatedSwap.SourceSymbol} → {updatedSwap.DestinationSymbol}. Please try again.",
-
-                _ => "Swap status updated."
-            };
-
-            if (update.Type == SwapTransactionType.Execute)
-            {
-                await UpdateSingleTokenInStorageAsync(update.TokenAddress, update.Network);
             }
+
+            await SyncSwapStateAsync(swap);
+
+            var message = BuildSwapMessage(swap, update.Type);
 
             try
             {
-                await _hubContext.Clients.Group(updatedSwap.WalletAddress)
+                await _hubContext.Clients.Group(swap.WalletAddress)
                     .SendAsync("SwapMessage", message);
             }
             catch (Exception ex)
@@ -363,6 +352,276 @@ namespace CoinBank.Services._Swap
                     update.SwapReference);
             }
         }
+
+        private async Task SyncSwapStateAsync(Swap swap)
+        {
+            //var swap = await _swapRepository.AsQueryable().FirstOrDefaultAsync(q => q.SwapReference == swapReference);
+
+            if (swap == null)
+            {
+                _logger.LogWarning("Swap not found for sync. SwapReference: {SwapReference}", swap.SwapReference);
+                return;
+            }
+
+            if (swap.Transactions == null || !swap.Transactions.Any())
+                return;
+      
+            var hasFailed = swap.Transactions.Any(t => t.Type == SwapTransactionType.Failed);
+            var hasExecute = swap.Transactions.Any(t => t.Type == SwapTransactionType.Execute);
+            var hasInit = swap.Transactions.Any(t => t.Type == SwapTransactionType.Init);
+
+            SwapState newState;
+
+            if (hasFailed)
+                newState = SwapState.Failed;
+            else if (hasExecute)
+                newState = SwapState.Completed;
+            else if (hasInit)
+                newState = SwapState.Pending;
+            else
+                newState = swap.State; // fallback
+
+           
+            var maxExecuteAmount = swap.Transactions
+                .Where(t => t.Type == SwapTransactionType.Execute)
+                .Select(t => t.Amount)
+                .DefaultIfEmpty(0)
+                .Max();
+          
+            var updates = new List<UpdateDefinition<Swap>>();
+
+            if (swap.State != newState)
+                updates.Add(Builders<Swap>.Update.Set(x => x.State, newState));
+
+            if (maxExecuteAmount > 0 && swap.DestinationAmount != maxExecuteAmount)
+                updates.Add(Builders<Swap>.Update.Set(x => x.DestinationAmount, maxExecuteAmount));
+
+            if (!updates.Any())
+                return;
+
+            var updateDef = Builders<Swap>.Update.Combine(updates);
+
+            await _swapRepository.FindOneAndUpdateAsync(
+                Builders<Swap>.Filter.Eq(x => x.SwapReference, swap.SwapReference),
+                updateDef
+            );
+        }
+       
+        private string BuildSwapMessage(Swap swap, SwapTransactionType type)
+        {
+            return type switch
+            {
+                SwapTransactionType.Init =>
+                    $"Swap started: {swap.SourceAmount} {swap.SourceSymbol} → {swap.DestinationSymbol}.",
+
+                SwapTransactionType.Execute =>
+                    $"Swap completed: You received {swap.DestinationAmount} {swap.DestinationSymbol}.",
+
+                SwapTransactionType.Failed =>
+                    $"Swap failed: {swap.SourceSymbol} → {swap.DestinationSymbol}. Please try again.",
+
+                _ => "Swap status updated."
+            };
+        }
+
+
+        //public async Task AddTransactionToSwapAsync(AddTransactionToSwapUpdate update)
+        //{
+        //    if (update == null || string.IsNullOrWhiteSpace(update.SwapReference))
+        //        return;
+
+        //    var tokenData = GetTokenWithAddressAndNetwork(update.TokenAddress, update.Network);
+        //    var tokenAmount = _blockChainService.ConvertFromWei(update.Amount, tokenData.PriceDecimalPlaces);
+
+        //    var transaction = new SwapTransaction
+        //    {
+        //        CreateMoment = DateTime.UtcNow,
+        //        Hash = update.Hash,
+        //        Network = update.Network,
+        //        Symbol = tokenData.Name,
+        //        Amount = tokenAmount,
+        //        Type = update.Type
+        //    };
+
+        //    var baseFilter = Builders<Swap>.Filter.Eq(x => x.SwapReference, update.SwapReference);
+
+        //    var newState = update.Type switch
+        //    {
+        //        SwapTransactionType.Init => SwapState.Pending,
+        //        SwapTransactionType.Execute => SwapState.Completed,
+        //        SwapTransactionType.Failed => SwapState.Failed,
+        //        _ => (SwapState?)null
+        //    };
+
+        //    var updateBuilder = Builders<Swap>.Update
+        //        .Push(x => x.Transactions, transaction);
+
+        //    if (newState.HasValue)
+        //        updateBuilder = updateBuilder.Set(x => x.State, newState.Value);
+
+        //    FilterDefinition<Swap> finalFilter = baseFilter;
+
+        //    if (update.Type == SwapTransactionType.Execute)
+        //    {
+        //        var amountFilter = Builders<Swap>.Filter.Lt(x => x.DestinationAmount, tokenAmount);
+        //        finalFilter = Builders<Swap>.Filter.And(baseFilter, amountFilter);
+
+        //        updateBuilder = updateBuilder.Set(x => x.DestinationAmount, tokenAmount);
+        //    }
+
+        //    var options = new FindOneAndUpdateOptions<Swap>
+        //    {
+        //        ReturnDocument = ReturnDocument.After
+        //    };
+
+        //    var updatedSwap = await _swapRepository.FindOneAndUpdateWithOptionAsync(finalFilter, updateBuilder, options);
+
+        //    if (updatedSwap == null && update.Type == SwapTransactionType.Execute)
+        //    {
+        //        updatedSwap = await _swapRepository.FindOneAndUpdateWithOptionAsync(
+        //            baseFilter,
+        //            Builders<Swap>.Update
+        //                .Push(x => x.Transactions, transaction)
+        //                .Set(x => x.State, SwapState.Completed),
+        //            options
+        //        );
+        //    }
+
+        //    if (updatedSwap == null)
+        //        return;
+
+        //    var message = BuildSwapMessage(updatedSwap, update.Type);
+
+        //    if (update.Type == SwapTransactionType.Execute)
+        //    {
+        //        await UpdateSingleTokenInStorageAsync(update.TokenAddress, update.Network);
+        //    }
+
+        //    try
+        //    {
+        //        await _hubContext.Clients.Group(updatedSwap.WalletAddress)
+        //            .SendAsync("SwapMessage", message);
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        _logger.LogError(ex,
+        //            "Failed to send Swap notification for SwapReference {SwapReference}",
+        //            update.SwapReference);
+        //    }
+        //}
+
+        //public async Task ProcessSwapTransactionAsync(AddTransactionToSwapUpdate update)
+        //{
+        //    if (update == null || string.IsNullOrWhiteSpace(update.SwapReference))
+        //    {
+        //        _logger.LogWarning("Invalid update payload.");
+        //        return;
+        //    }
+
+        //    var tokenData = GetTokenWithAddressAndNetwork(update.TokenAddress, update.Network);
+        //    if (tokenData == null)
+        //    {
+        //        _logger.LogWarning("Token not found: {TokenAddress} - {Network}", update.TokenAddress, update.Network);
+        //        return;
+        //    }
+
+        //    var tokenAmount = _blockChainService.ConvertFromWei(update.Amount, tokenData.PriceDecimalPlaces);
+
+        //    var transaction = new SwapTransaction
+        //    {
+        //        CreateMoment = DateTime.UtcNow,
+        //        Hash = update.Hash,
+        //        Network = update.Network,
+        //        Symbol = tokenData.Name,
+        //        Amount = tokenAmount,
+        //        Type = update.Type
+        //    };
+
+        //    //ignore duplicate transaction
+        //    var baseFilter = Builders<Swap>.Filter.And(
+        //        Builders<Swap>.Filter.Eq(x => x.SwapReference, update.SwapReference),
+        //        Builders<Swap>.Filter.Ne("Transactions.Hash", update.Hash)
+        //    );
+
+        //    var updateBuilder = Builders<Swap>.Update
+        //        .Push(x => x.Transactions, transaction);
+
+          
+        //    var newState = update.Type switch
+        //    {
+        //        SwapTransactionType.Init => SwapState.Pending,
+        //        SwapTransactionType.Execute => SwapState.Completed,
+        //        SwapTransactionType.Failed => SwapState.Failed,
+        //        _ => (SwapState?)null
+        //    };
+
+        //    if (newState.HasValue)
+        //    {
+        //        updateBuilder = updateBuilder.Set(x => x.State, newState.Value);
+        //    }
+
+        //    FilterDefinition<Swap> finalFilter = baseFilter;
+
+        //    // فقط اگر Execute بود، مقدار destination رو فقط در صورت بزرگتر بودن آپدیت کن
+        //    if (update.Type == SwapTransactionType.Execute)
+        //    {
+        //        var amountFilter = Builders<Swap>.Filter.Or(
+        //            Builders<Swap>.Filter.Exists(x => x.DestinationAmount, false),
+        //            Builders<Swap>.Filter.Lt(x => x.DestinationAmount, tokenAmount)
+        //        );
+
+        //        finalFilter = Builders<Swap>.Filter.And(baseFilter, amountFilter);
+
+        //        updateBuilder = updateBuilder.Set(x => x.DestinationAmount, tokenAmount);
+        //    }
+
+        //    var options = new FindOneAndUpdateOptions<Swap>
+        //    {
+        //        ReturnDocument = ReturnDocument.After
+        //    };
+
+        //    var updatedSwap = await _swapRepository.FindOneAndUpdateWithOptionAsync(finalFilter, updateBuilder, options);
+
+        //    // fallback برای Execute (مثلاً وقتی مقدار کوچکتر بوده)
+        //    if (updatedSwap == null && update.Type == SwapTransactionType.Execute)
+        //    {
+        //        var fallbackUpdate = Builders<Swap>.Update
+        //            .Push(x => x.Transactions, transaction)
+        //            .Set(x => x.State, SwapState.Completed);
+
+        //        updatedSwap = await _swapRepository.FindOneAndUpdateWithOptionAsync(
+        //            Builders<Swap>.Filter.Eq(x => x.SwapReference, update.SwapReference),
+        //            fallbackUpdate,
+        //            options
+        //        );
+        //    }
+
+        //    if (updatedSwap == null)
+        //    {
+        //        _logger.LogWarning("Swap not found or duplicate transaction ignored: {SwapReference}", update.SwapReference);
+        //        return;
+        //    }
+
+        //    var message = BuildSwapMessage(updatedSwap, update.Type);
+
+        //    if (update.Type == SwapTransactionType.Execute)
+        //    {
+        //        await UpdateSingleTokenInStorageAsync(update.TokenAddress, update.Network);
+        //    }
+
+        //    try
+        //    {
+        //        await _hubContext.Clients.Group(updatedSwap.WalletAddress)
+        //            .SendAsync("SwapMessage", message);
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        _logger.LogError(ex,
+        //            "Failed to send Swap notification for SwapReference {SwapReference}",
+        //            update.SwapReference);
+        //    }
+        //}
+
 
         public async Task InitializeSwapStorageAsync()
         {
@@ -529,7 +788,6 @@ namespace CoinBank.Services._Swap
         }
 
 
-
         #region Private Methods
         private AvailableTokenData GetTokenWithAddressAndNetwork(string tokenAddress, string network = null)
         {
@@ -564,7 +822,7 @@ namespace CoinBank.Services._Swap
         private async Task ValidateBalancesForSwapAsync(CreateSwapUpdate update, string userWallet)
         {
             if (string.IsNullOrWhiteSpace(userWallet))
-                throw new Exception("User wallet is required");
+                throw new BadRequestException("User wallet is required");
 
             var sourceToken = _availableTokenDatas.FirstOrDefault(t =>
                 t.Name == update.SourceSymbol && t.Network == update.SourceNetwork);
@@ -573,10 +831,10 @@ namespace CoinBank.Services._Swap
                 t.Name == update.DestinationToken && t.Network == update.DestinationNetwork);
 
             if (sourceToken == null)
-                throw new Exception("Source token not supported");
+                throw new BadRequestException("Source token not supported");
 
             if (destinationToken == null)
-                throw new Exception("Destination token not supported");
+                throw new BadRequestException("Destination token not supported");
 
             decimal userBalance = 0;
 
@@ -596,18 +854,18 @@ namespace CoinBank.Services._Swap
             }
             else
             {
-                throw new Exception("Unsupported network for source token");
+                throw new BadRequestException("Unsupported network for source token");
             }
 
             if (userBalance < update.SourceTokenAmount)
-                throw new Exception("Insufficient balance");
+                throw new BadRequestException("Insufficient balance");
 
 
             var sourcePrice = await _priceService.GetOneTokenPriceForInternalUsageAsync(sourceToken.Name);
             var destinationPrice = await _priceService.GetOneTokenPriceForInternalUsageAsync(destinationToken.Name);
 
             if (sourcePrice <= 0 || destinationPrice <= 0)
-                throw new Exception("Price error");
+                throw new BadRequestException("Price error");
 
             var destinationAmount = (update.SourceTokenAmount * sourcePrice) / destinationPrice;
 
@@ -646,11 +904,11 @@ namespace CoinBank.Services._Swap
                 }
                 else
                 {
-                    throw new Exception("Unsupported destination network");
+                    throw new BadRequestException("Unsupported destination network");
                 }
 
                 if (!contractBalances.TryGetValue(destinationToken.Name, out contractBalance))
-                    throw new Exception("Destination token liquidity not found");
+                    throw new BadRequestException("Destination token liquidity not found");
 
 
                 _swapStorage.UpdateContractBalance(destinationToken.Address, contractBalance);
@@ -658,7 +916,7 @@ namespace CoinBank.Services._Swap
             }
 
             if (contractBalance < destinationAmount)
-                throw new Exception("Insufficient liquidity");
+                throw new BadRequestException("Insufficient liquidity");
         }
 
 
