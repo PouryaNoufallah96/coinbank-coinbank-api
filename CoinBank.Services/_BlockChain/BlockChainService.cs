@@ -454,7 +454,6 @@ namespace CoinBank.Services._BlockChain
             };
         }
 
-
         public async Task<BigInteger> SwapGetOutputAmountAsync(SwapGetOutputAmount update)
         {
             if (update == null)
@@ -534,6 +533,7 @@ namespace CoinBank.Services._BlockChain
                 _ => throw new BadRequestException($"Unsupported network: {network}")
             };
         }
+       
         private Web3 GetWeb3(string network)
         {
             return network?.ToUpper() switch
@@ -796,7 +796,7 @@ namespace CoinBank.Services._BlockChain
 
             var token = ValidateToken(tokenName, "ERC20");
             if (token == null)
-                throw new ArgumentException($"Token '{tokenName}' not found in available tokens.");
+                throw new BadRequestException($"Token '{tokenName}' not found in available tokens.");
 
             var erc20Contract = _erc20Web3.Eth.GetContract(ERC20Abi, token.Address);
             var balanceOfFunction = erc20Contract.GetFunction("balanceOf");
