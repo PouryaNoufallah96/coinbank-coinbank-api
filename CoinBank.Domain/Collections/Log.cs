@@ -12,6 +12,6 @@ namespace CoinBank.Domain.Collections
         public string ServiceName { get; set; }
         public string MethodName { get; set; }
         public LogImportance Importance { get; set; }
-    }
+    } 
     public enum LogImportance { Low, Medium, High, VeryHigh }
 }
