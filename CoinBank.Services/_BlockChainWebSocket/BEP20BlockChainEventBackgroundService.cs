@@ -556,10 +556,10 @@ namespace CoinBank.Services._BlockChainWebSocket
                 EventType = BlockchainEventType.SwapExecuted
             });
 
-            lock (_blockLock)
-            {
-                _swapLastProcessedBlock = BigInteger.Max(_swapLastProcessedBlock, log.BlockNumber.Value + 1);
-            }
+            //lock (_blockLock)
+            //{
+            //    _swapLastProcessedBlock = BigInteger.Max(_swapLastProcessedBlock, log.BlockNumber.Value + 1);
+            //}
         }
 
         private async Task HandleSwapFailed(FilterLog log, EventLog<SwapFailedEventDTO> ev, string network)
@@ -581,10 +581,10 @@ namespace CoinBank.Services._BlockChainWebSocket
                 EventType = BlockchainEventType.SwapFailed
             });
 
-            lock (_blockLock)
-            {
-                _swapLastProcessedBlock = BigInteger.Max(_swapLastProcessedBlock, log.BlockNumber.Value + 1);
-            }
+            //lock (_blockLock)
+            //{
+            //    _swapLastProcessedBlock = BigInteger.Max(_swapLastProcessedBlock, log.BlockNumber.Value + 1);
+            //}
         }
 
         private async Task<HexBigInteger> GetSwapLastProcessedBlock(CancellationToken cancellationToken)

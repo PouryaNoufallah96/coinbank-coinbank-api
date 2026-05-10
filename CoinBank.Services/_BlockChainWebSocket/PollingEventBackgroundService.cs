@@ -76,7 +76,7 @@
 //            var _web3Client = new Web3(_settings.RpcUrl);
 //            var latestBlockNumber = await _web3Client.Eth.Blocks.GetBlockNumber.SendRequestAsync();
 
-//            lock (_blockLock) 
+//            lock (_blockLock)
 //            {
 //                _lastProcessedBlock = latestBlockNumber;
 //                return latestBlockNumber;
@@ -111,7 +111,7 @@
 //                {
 //                    var logs = await _web3Client.Eth.Filters.GetLogs.SendRequestAsync(filter);
 
-                  
+
 
 //                    foreach (var log in logs)
 //                    {
