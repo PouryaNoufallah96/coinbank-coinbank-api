@@ -251,6 +251,45 @@ namespace CoinBank.Services._BlockChain
             }
         }
 
+        public async Task<BigInteger> GetLiquidityBalanceAsync(string tokenName, string network)
+        {
+            if (string.IsNullOrWhiteSpace(tokenName))
+                throw new BadRequestException("Token name is required.");
+
+            if (string.IsNullOrWhiteSpace(network))
+                throw new BadRequestException("Network is required.");
+
+            try
+            {
+                var token = ValidateToken(tokenName, network);
+                var web3 = GetWeb3(network);
+                var contractAddress = GetSwapContractAddress(network);
+
+                var contract = web3.Eth.GetContract(SwapAbi, contractAddress);
+                var function = contract.GetFunction("getLiquidityBalance");
+
+                var result = await function.CallAsync<BigInteger>(token.Address);
+
+                //_logger.LogInformation(
+                //    "GetLiquidityBalance | Network: {Network} | Token: {Token} | Balance: {Balance}",
+                //    network,
+                //    token.Name,
+                //    result);
+
+                return result;
+            }
+            catch (SmartContractRevertException revertEx)
+            {
+                _logger.LogError(revertEx, "Contract revert in getLiquidityBalance: {Message}", revertEx.Message);
+                throw;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error in GetLiquidityBalanceAsync");
+                throw;
+            }
+        }
+
         private object[] MapVestingData(List<PreSaleReleaseStep> releaseSchedule)
         {
             if (releaseSchedule == null || !releaseSchedule.Any())

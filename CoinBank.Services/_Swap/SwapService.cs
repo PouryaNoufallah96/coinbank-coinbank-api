@@ -78,6 +78,13 @@ namespace CoinBank.Services._Swap
                 SourceAmountInWei = sourceAmountInWei
             });
 
+            var destinationContractBalance = await _blockChainService.GetLiquidityBalanceAsync(destinationSymbol, destinationNetwork);
+
+            if(destinationContractBalance < destinationTokenOutAmountInWei)
+            {
+                throw new BadRequestException($"Insufficient liquidity for {destinationSymbol}.");
+            }
+
             var destinationAmount = _blockChainService.ConvertFromWei(destinationTokenOutAmountInWei, destinationTokenData.PriceDecimalPlaces);
 
             var swap = new Swap
