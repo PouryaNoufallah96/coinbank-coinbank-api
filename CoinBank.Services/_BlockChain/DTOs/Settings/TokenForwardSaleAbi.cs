@@ -437,13 +437,42 @@
                         ""name"": ""receiver"",
                         ""type"": ""address"",
                         ""internalType"": ""address""
+                    },
+                    {
+                        ""name"": ""path"",
+                        ""type"": ""address[]"",
+                        ""internalType"": ""address[]""
                     }
                 ]
             },
             {
-                ""name"": ""options"",
+                ""name"": ""sendOptions"",
                 ""type"": ""bytes"",
                 ""internalType"": ""bytes""
+            },
+            {
+                ""name"": ""returnOptions"",
+                ""type"": ""bytes"",
+                ""internalType"": ""bytes""
+            }
+        ],
+        ""outputs"": [
+            {
+                ""name"": """",
+                ""type"": ""uint256"",
+                ""internalType"": ""uint256""
+            }
+        ],
+        ""stateMutability"": ""view""
+    },
+    {
+        ""type"": ""function"",
+        ""name"": ""getLiquidityBalance"",
+        ""inputs"": [
+            {
+                ""name"": ""token"",
+                ""type"": ""address"",
+                ""internalType"": ""address""
             }
         ],
         ""outputs"": [
@@ -460,9 +489,14 @@
         ""name"": ""getOutputAmount"",
         ""inputs"": [
             {
-                ""name"": ""tokenIn"",
-                ""type"": ""address"",
-                ""internalType"": ""address""
+                ""name"": ""srcEid"",
+                ""type"": ""uint32"",
+                ""internalType"": ""uint32""
+            },
+            {
+                ""name"": ""dstEid"",
+                ""type"": ""uint32"",
+                ""internalType"": ""uint32""
             },
             {
                 ""name"": ""amountIn"",
@@ -470,9 +504,9 @@
                 ""internalType"": ""uint256""
             },
             {
-                ""name"": ""tokenOut"",
-                ""type"": ""address"",
-                ""internalType"": ""address""
+                ""name"": ""path"",
+                ""type"": ""address[]"",
+                ""internalType"": ""address[]""
             }
         ],
         ""outputs"": [
@@ -527,17 +561,40 @@
                         ""name"": ""receiver"",
                         ""type"": ""address"",
                         ""internalType"": ""address""
+                    },
+                    {
+                        ""name"": ""path"",
+                        ""type"": ""address[]"",
+                        ""internalType"": ""address[]""
                     }
                 ]
             },
             {
-                ""name"": ""options"",
+                ""name"": ""sendOptions"",
+                ""type"": ""bytes"",
+                ""internalType"": ""bytes""
+            },
+            {
+                ""name"": ""returnOptions"",
                 ""type"": ""bytes"",
                 ""internalType"": ""bytes""
             }
         ],
         ""outputs"": [],
         ""stateMutability"": ""payable""
+    },
+    {
+        ""type"": ""event"",
+        ""name"": ""SwapCompleted"",
+        ""inputs"": [
+            {
+                ""name"": ""swapId"",
+                ""type"": ""bytes32"",
+                ""indexed"": false,
+                ""internalType"": ""bytes32""
+            }
+        ],
+        ""anonymous"": false
     },
     {
         ""type"": ""event"",
@@ -652,6 +709,37 @@
                 ""type"": ""uint256"",
                 ""indexed"": false,
                 ""internalType"": ""uint256""
+            }
+        ],
+        ""anonymous"": false
+    },
+    {
+        ""type"": ""event"",
+        ""name"": ""SwapRefunded"",
+        ""inputs"": [
+            {
+                ""name"": ""swapId"",
+                ""type"": ""bytes32"",
+                ""indexed"": false,
+                ""internalType"": ""bytes32""
+            },
+            {
+                ""name"": ""token"",
+                ""type"": ""address"",
+                ""indexed"": false,
+                ""internalType"": ""address""
+            },
+            {
+                ""name"": ""amount"",
+                ""type"": ""uint256"",
+                ""indexed"": false,
+                ""internalType"": ""uint256""
+            },
+            {
+                ""name"": ""user"",
+                ""type"": ""address"",
+                ""indexed"": false,
+                ""internalType"": ""address""
             }
         ],
         ""anonymous"": false

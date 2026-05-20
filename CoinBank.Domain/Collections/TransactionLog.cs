@@ -34,6 +34,8 @@ namespace CoinBank.Domain.Collections
         SwapInitiated,
         SwapExecuted,
         SwapFailed,
+        SwapCompleted,
+        SwapRefunded,
         TransactionConfirmed, 
         TransactionFailed,
         BlockMined,

@@ -80,6 +80,7 @@ namespace CoinBank.Services._Transaction
             {
                 _logger.LogError(ex, "Error while creating PreSaleOrderCreate transaction log.");
             }
+
         }
 
         public async Task CreatePreSaleReleaseClaimedLogAsync(PreSaleReleaseClaimedLog input)
@@ -269,6 +270,48 @@ namespace CoinBank.Services._Transaction
             }
         }
 
+        public async Task CreateSwapCompletedLogAsync(SwapCompletedLog input)
+        {
+            try
+            {
+                var existsLog = await _transactionLogRepository.AsQueryable()
+                    .Where(q =>
+                        q.Hash.ToLower() == input.Hash.ToLower() &&
+                        q.Reference.ToLower() == input.SwapId.ToLower() &&
+                        q.EventType == BlockchainEventType.SwapCompleted)
+                    .FirstOrDefaultAsync();
+
+                if (existsLog != null)
+                {
+                    _logger.LogWarning(
+                        "Duplicate SwapCompleted log detected for SwapId {SwapId}. Skipping insertion. Hash: {Hash}",
+                        input.SwapId, input.Hash);
+                    return;
+                }
+
+                var newLog = new TransactionLog
+                {
+                    Hash = input.Hash,
+                    Wallet = null,
+                    BlockNumber = (decimal)input.BlockNumber,
+                    EventType = BlockchainEventType.SwapCompleted,
+                    Status = TransactionStatus.Confirmed,
+                    Network = input.Network,
+
+                    Reference = input.SwapId,
+                    TokenAddress = input.Address,
+
+                    Data = SerializeData(input)
+                };
+
+                await _transactionLogRepository.InsertOneAsync(newLog);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error while creating SwapCompleted transaction log.");
+            }
+        }
+        
         public async Task CreateSwapFailedLogAsync(SwapFailedLog input)
         {
             try
@@ -319,6 +362,48 @@ namespace CoinBank.Services._Transaction
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error while creating SwapFailed transaction log.");
+            }
+        }
+
+        public async Task CreateSwapRefundedLogAsync(SwapRefundedLog input)
+        {
+            try
+            {
+                var existsLog = await _transactionLogRepository.AsQueryable()
+                    .Where(q =>
+                        q.Hash.ToLower() == input.Hash.ToLower() &&
+                        q.Reference.ToLower() == input.SwapId.ToLower() &&
+                        q.EventType == BlockchainEventType.SwapRefunded)
+                    .FirstOrDefaultAsync();
+
+                if (existsLog != null)
+                {
+                    _logger.LogWarning(
+                        "Duplicate SwapRefunded log detected for SwapId {SwapId}. Skipping insertion. Hash: {Hash}",
+                        input.SwapId, input.Hash);
+                    return;
+                }
+
+                var newLog = new TransactionLog
+                {
+                    Hash = input.Hash,
+                    Wallet = input.User,
+                    BlockNumber = (decimal)input.BlockNumber,
+                    EventType = BlockchainEventType.SwapRefunded,
+                    Status = TransactionStatus.Confirmed,
+                    Network = input.Network,
+
+                    Reference = input.SwapId,
+                    TokenAddress = input.Token,
+
+                    Data = SerializeData(input)
+                };
+
+                await _transactionLogRepository.InsertOneAsync(newLog);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error while creating SwapRefunded transaction log.");
             }
         }
 
@@ -397,9 +482,9 @@ namespace CoinBank.Services._Transaction
                     SwapId = x.SwapId,
                     SourceTokenAddress = x.SourceTokenAddress,
                     DestinationTokenAddress = x.DestinationTokenAddress,
-                    DesEid = x.DesEid,
-                    SourceTokenAmount = x.SourceTokenAmount,
-                    DestinationTokenAmount = x.DestinationTokenAmount,
+                    DesEid = x.DesEid.ToString(),
+                    SourceTokenAmount = x.SourceTokenAmount.ToString(),
+                    DestinationTokenAmount = x.DestinationTokenAmount.ToString(),
                     DestinationWallet = x.DestinationWallet,
                     Fee = x.Fee
                 },
@@ -408,7 +493,7 @@ namespace CoinBank.Services._Transaction
                 {
                     SwapId = x.SwapId,
                     DestinationTokenAddress = x.DestinationTokenAddress,
-                    DestinationTokenAmount = x.DestinationTokenAmount,
+                    DestinationTokenAmount = x.DestinationTokenAmount.ToString(),
                     DestinationWallet = x.DestinationWallet
                 },
 
@@ -416,8 +501,21 @@ namespace CoinBank.Services._Transaction
                 {
                     SwapId = x.SwapId,
                     DestinationTokenAddress = x.DestinationTokenAddress,
-                    DestinationTokenAmount = x.DestinationTokenAmount,
+                    DestinationTokenAmount = x.DestinationTokenAmount.ToString(),
                     DestinationWallet = x.DestinationWallet
+                },
+
+                SwapCompletedLog x => new SwapCompletedLogData
+                {
+                    SwapId = x.SwapId,
+                },
+
+                SwapRefundedLog x => new SwapRefundedLogData
+                {
+                    SwapId = x.SwapId,
+                    Token = x.Token,
+                    Amount = x.Amount.ToString(),
+                    User = x.User
                 },
 
 

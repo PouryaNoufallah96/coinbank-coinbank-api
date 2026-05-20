@@ -18,21 +18,37 @@ namespace CoinBank.Services._BlockChainWebSocket
 {
     public class ERC20PollingEventBackgroundService : BackgroundService, IHostedDependency
     {
-        private const string LogPrefix = "[ERC20-POLLING]";
+        private const string SwapLogPrefix = "[ERC20-POLLING-Swap]";
+        private const string CommonLogPrefix = "[ERC20-POLLING]";
+        private const string NetworkName = "ERC20";
+
         private readonly ITransactionLogService _transactionLogService;
         private readonly ILogger<ERC20PollingEventBackgroundService> _logger;
         private readonly BlockChainSettings _blockChainSettings;
         private readonly object _blockLock = new();
-        private readonly Web3 _web3;
+
+        private Web3 _web3;
+
+        private readonly string[] _rpcUrls;
+
+        private int _currentRpcIndex = 0;
+
         private BigInteger _swapLastProcessedBlock = 0;
+
+        private bool _isDisposed = false;
 
         public ERC20PollingEventBackgroundService(
             ITransactionLogService transactionLogService,
-            ILogger<ERC20PollingEventBackgroundService> logger, BlockChainSettings blockChainSettings)
+            ILogger<ERC20PollingEventBackgroundService> logger,
+            BlockChainSettings blockChainSettings)
         {
-            _transactionLogService = transactionLogService; _logger = logger;
+            _transactionLogService = transactionLogService;
+            _logger = logger;
             _blockChainSettings = blockChainSettings;
-            _web3 = new Web3(_blockChainSettings.ERC20RpcUrl);
+
+            _rpcUrls = new[] { _blockChainSettings.ERC20RpcUrl };
+
+            InitializeClients();
         }
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
@@ -44,7 +60,7 @@ namespace CoinBank.Services._BlockChainWebSocket
                     BigInteger latestBlock = await _web3.Eth.Blocks.GetBlockNumber.SendRequestAsync();
                     _logger.LogInformation(
                      "{Prefix} Checking latest block: {Block}",
-                     LogPrefix,
+                     CommonLogPrefix,
                      latestBlock);
 
                     var safeBlock = latestBlock - 10;
@@ -59,7 +75,7 @@ namespace CoinBank.Services._BlockChainWebSocket
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "Unexpected error in blockchain event service");
+                    _logger.LogError(ex, "{Prefix} Unexpected error in blockchain event service", CommonLogPrefix);
                     await Task.Delay(5000, stoppingToken);
                 }
             }
@@ -106,38 +122,51 @@ namespace CoinBank.Services._BlockChainWebSocket
 
                         try
                         {
-
                             var initiated = log.DecodeEvent<SwapInitiatedEventDTO>();
                             if (initiated != null)
                             {
-                                await HandleSwapInitiated(log, initiated, "ERC20");
+                                await HandleSwapInitiated(log, initiated, NetworkName);
                                 continue;
                             }
 
                             var executed = log.DecodeEvent<SwapExecutedEventDTO>();
                             if (executed != null)
                             {
-                                await HandleSwapExecuted(log, executed, "ERC20");
+                                await HandleSwapExecuted(log, executed, NetworkName);
                                 continue;
                             }
 
                             var failed = log.DecodeEvent<SwapFailedEventDTO>();
                             if (failed != null)
                             {
-                                await HandleSwapFailed(log, failed, "ERC20");
+                                await HandleSwapFailed(log, failed, NetworkName);
+                                continue;
+                            }
+
+                            var completed = log.DecodeEvent<SwapCompletedEventDTO>();
+                            if (completed != null)
+                            {
+                                await HandleSwapCompleted(log, completed, NetworkName);
+                                continue;
+                            }
+
+                            var refunded = log.DecodeEvent<SwapRefundedEventDTO>();
+                            if (refunded != null)
+                            {
+                                await HandleSwapRefunded(log, refunded, NetworkName);
                                 continue;
                             }
 
                         }
                         catch (Exception ex)
                         {
-                            _logger.LogError(ex, "Error decoding polled log");
+                            _logger.LogError(ex, "{Prefix} Error decoding polled log", SwapLogPrefix);
                         }
                     }
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "Error polling logs from {FromBlock} to {ToBlock}", fromBlock, toBlock);
+                    _logger.LogError(ex, "{Prefix} Error polling logs from {FromBlock} to {ToBlock}", SwapLogPrefix, fromBlock, toBlock);
                 }
 
                 fromBlock = toBlock + 1;
@@ -147,10 +176,10 @@ namespace CoinBank.Services._BlockChainWebSocket
             lock (_blockLock)
             {
                 _swapLastProcessedBlock = BigInteger.Max(_swapLastProcessedBlock, latestBlock);
-                _logger.LogInformation(
-                 "{Prefix} Checking latest block: {Block}",
-                 LogPrefix,
-                 latestBlock);
+                //_logger.LogInformation(
+                // "{Prefix} Checking latest block: {Block}",
+                // CommonLogPrefix,
+                // latestBlock);
             }
         }
 
@@ -163,7 +192,6 @@ namespace CoinBank.Services._BlockChainWebSocket
                 Hash = log.TransactionHash,
                 Address = log.Address,
                 BlockNumber = log.BlockNumber.Value,
-
                 SwapId = swapId,
                 Buyer = ev.Event.Receiver,
                 SourceTokenAddress = ev.Event.TokenIn,
@@ -174,7 +202,6 @@ namespace CoinBank.Services._BlockChainWebSocket
                 DestinationWallet = ev.Event.Receiver,
                 Fee = ev.Event.Fee.ToString(),
                 Network = network,
-
                 EventType = BlockchainEventType.SwapInitiated
             });
 
@@ -194,13 +221,11 @@ namespace CoinBank.Services._BlockChainWebSocket
                 Hash = log.TransactionHash,
                 Address = log.Address,
                 BlockNumber = log.BlockNumber.Value,
-
                 SwapId = swapId,
                 DestinationTokenAddress = ev.Event.TokenOut,
                 DestinationTokenAmount = ev.Event.AmountOut,
                 DestinationWallet = ev.Event.Receiver,
                 Network = network,
-
                 EventType = BlockchainEventType.SwapExecuted
             });
 
@@ -215,16 +240,47 @@ namespace CoinBank.Services._BlockChainWebSocket
                 Hash = log.TransactionHash,
                 Address = log.Address,
                 BlockNumber = log.BlockNumber.Value,
-
                 SwapId = swapId,
                 DestinationTokenAddress = ev.Event.TokenOut,
                 DestinationTokenAmount = ev.Event.AmountOut,
                 DestinationWallet = ev.Event.Receiver,
                 Network = network,
-
                 EventType = BlockchainEventType.SwapFailed
             });
 
+        }
+
+        private async Task HandleSwapCompleted(FilterLog log, EventLog<SwapCompletedEventDTO> ev, string network)
+        {
+            var swapId = ByteArray32ToHex(ev.Event.SwapId);
+
+            await _transactionLogService.CreateSwapCompletedLogAsync(new SwapCompletedLog
+            {
+                Hash = log.TransactionHash,
+                Address = log.Address,
+                BlockNumber = log.BlockNumber.Value,
+                SwapId = swapId,
+                Network = network,
+                EventType = BlockchainEventType.SwapCompleted
+            });
+        }
+
+        private async Task HandleSwapRefunded(FilterLog log, EventLog<SwapRefundedEventDTO> ev, string network)
+        {
+            var swapId = ByteArray32ToHex(ev.Event.SwapId);
+
+            await _transactionLogService.CreateSwapRefundedLogAsync(new SwapRefundedLog
+            {
+                Hash = log.TransactionHash,
+                Address = log.Address,
+                BlockNumber = log.BlockNumber.Value,
+                SwapId = swapId,
+                Token = ev.Event.Token,
+                Amount = ev.Event.Amount,
+                User = ev.Event.User,
+                Network = network,
+                EventType = BlockchainEventType.SwapRefunded
+            });
         }
 
         private async Task<HexBigInteger> GetSwapLastProcessedBlock(CancellationToken cancellationToken)
@@ -237,7 +293,7 @@ namespace CoinBank.Services._BlockChainWebSocket
                         return _swapLastProcessedBlock.ToHexBigInteger();
                 }
 
-                var lastDbBlock = await _transactionLogService.GetSwapLastCheckedBlockNumberAsync("ERC20");
+                var lastDbBlock = await _transactionLogService.GetSwapLastCheckedBlockNumberAsync(NetworkName);
 
                 lock (_blockLock)
                 {
@@ -246,7 +302,6 @@ namespace CoinBank.Services._BlockChainWebSocket
 
                 if (_swapLastProcessedBlock > 0)
                     return _swapLastProcessedBlock.ToHexBigInteger();
-
 
                 var latestBlockNumber = await _web3.Eth.Blocks.GetBlockNumber.SendRequestAsync();
 
@@ -258,13 +313,12 @@ namespace CoinBank.Services._BlockChainWebSocket
             }
             catch (Exception e)
             {
-                _logger.LogError(e, "Error getting swap last processed block");
+                _logger.LogError(e, "{Prefix} Error getting swap last processed block", SwapLogPrefix);
                 throw;
             }
         }
 
         #endregion
-
 
 
         private static string ByteArray32ToHex(byte[] bytes)
@@ -277,11 +331,24 @@ namespace CoinBank.Services._BlockChainWebSocket
 
             return "0x" + bytes.ToHex();
         }
+      
+        private void InitializeClients()
+        {
+            _web3 = new Web3(GetCurrentRpcUrl());
+        }
 
+        private string GetCurrentRpcUrl()
+        {
+            return _rpcUrls[_currentRpcIndex];
+        }
 
         public override async Task StopAsync(CancellationToken cancellationToken)
         {
-            _logger.LogInformation("Shutting down blockchain Polling service...");
+            if (_isDisposed) return;
+
+            _logger.LogInformation("{Prefix} Stopping polling service...", CommonLogPrefix);
+
+            _isDisposed = true;
             await base.StopAsync(cancellationToken);
         }
     }
