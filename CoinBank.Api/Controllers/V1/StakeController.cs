@@ -17,58 +17,53 @@ namespace CoinBank.Api.Controllers.V1
     [Route("api/v{version:apiVersion}/[controller]")]
     public class StakeController(IStakeService _stakeService) : ApiBaseController
     {
-       
+
         [HttpPost("[action]")]
-        [Authorize(RequireActiveWithEVMWallet = true)]
-        [CustomRateLimit(maxAttemptsCount: 20)]
-        [SwaggerOperation(Summary = "Create stake", Tags = ["Stake"])]
+        [CustomRateLimit]
+        [Authorize(RequireActiveWithBEP20Wallet = true)]
+        [SwaggerOperation(Summary = "Create Pending Stake ", Tags = ["Stake"])]
         public async Task<StakeResult> CreateStakeAsync(CreateStakeUpdate update)
         {
             return await _stakeService.CreateStakeAsync(
                 update,
-                PublicKey,
-                EVMWalletAddress
+                EVMWalletAddress,
+                NetworkType
             );
         }
 
-    
+
         [HttpPost("[action]")]
-        [Authorize(RequireActiveUser = false)]
-        [CustomRateLimit(maxAttemptsCount: 50)]
+        [CustomRateLimit]
+        [Authorize(RequireActiveUser = false, JustBSC = true)]
         [SwaggerOperation(Summary = "Get stake history", Tags = ["Stake"])]
         public async Task<StakeListResult> GetStakeHistoryAsync(StakeHistoryUpdate update)
         {
             return await _stakeService.GetStakeHistoryAsync(
                 update,
-                PublicKey,
                 EVMWalletAddress
             );
         }
 
-    
         [HttpPost("[action]")]
-        [Authorize(RequireActiveUser = false)]
-        [CustomRateLimit(maxAttemptsCount: 50)]
-        [SwaggerOperation(Summary = "Get wallet stats", Tags = ["Stake"])]
-        public async Task<List<StakeWalletStatsResult>> GetWalletStatsAsync(GetStakeWalletStatsUpdate update)
-        {
-            return await _stakeService.GetWalletStatsAsync(
-                update,
-                PublicKey,
-                EVMWalletAddress
-            );
-        }
-
-      
-        [HttpPost("[action]")]
-        [Authorize(RequireActiveUser = false)]
-        [CustomRateLimit(maxAttemptsCount: 50)]
-        [SwaggerOperation(Summary = "Get stake detail", Tags = ["Stake"])]
+        [CustomRateLimit]
+        [Authorize(RequireActiveUser = false, JustBSC = true)]
+        [SwaggerOperation(Summary = "Get one stake Detail", Tags = ["Stake"])]
         public async Task<StakeDetailResult> GetStakeDetailAsync(StakeDetailUpdate update)
         {
             return await _stakeService.GetStakeDetailAsync(
                 update,
-                PublicKey,
+                EVMWalletAddress
+            );
+        }
+
+        [HttpPost("[action]")]
+        [CustomRateLimit]
+        [Authorize(RequireActiveUser = false, JustBSC = true)]
+        [SwaggerOperation(Summary = "Get Wallet stats for stake side", Tags = ["Stake"])]
+        public async Task<List<StakeWalletStatsResult>> GetWalletStatsAsync(GetStakeWalletStatsUpdate update)
+        {
+            return await _stakeService.GetWalletStatsAsync(
+                update, 
                 EVMWalletAddress
             );
         }

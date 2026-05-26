@@ -175,6 +175,7 @@ publish/
 *.azurePubxml
 # Note: Comment the next line if you want to checkin your web deploy settings,
 # but database connection strings (with potential passwords) will be unencrypted
+temp_auto_push.bat
 *.pubxml
 *.publishproj
 
@@ -352,4 +353,5 @@ node_modules
 .env.local
 .env.development
 .env.production
-.env.test
+.env.testbranch_structure.json
+branch_structure.json

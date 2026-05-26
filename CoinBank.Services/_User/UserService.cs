@@ -32,10 +32,10 @@ namespace CoinBank.Services._User
     IUserRepository _userRepository,
     UserAuthStorage _userAuthStorage) : IUserService, IScopedDependency
     {
-        private static readonly HttpClient _httpClient = new HttpClient
-        {
-            Timeout = TimeSpan.FromSeconds(10)
-        };
+        //private static readonly HttpClient _httpClient = new HttpClient
+        //{
+        //    Timeout = TimeSpan.FromSeconds(10)
+        //};
 
         /// <summary>
         /// used for create one time nonce
@@ -93,7 +93,7 @@ namespace CoinBank.Services._User
 
             _userAuthStorage.RemoveItem(update.Nonce);
 
-            return Authenticate(user);
+            return Authenticate(user, update.WalletType, update.WalletAddress);
         }
 
 
@@ -147,17 +147,20 @@ namespace CoinBank.Services._User
 
             switch (update.WalletType)
             {
-                case WalletType.EVM:
+                case WalletType.BEP20:
                     user.EVMWalletAddress = update.WalletAddress;
                     break;
-                case WalletType.TRON:
+                case WalletType.ERC20:
+                    user.EVMWalletAddress = update.WalletAddress;
+                    break;
+                case WalletType.TRC20:
                     user.TronWalletAddress = update.WalletAddress;
                     break;
                 default:
                     throw new BadRequestException("Invalid Wallet type");
             }
 
-            return Authenticate(user);
+            return Authenticate(user, update.WalletType, update.WalletAddress);
         }
 
         /// <summary>
@@ -269,8 +272,9 @@ namespace CoinBank.Services._User
             {
                 string recoveredAddress = walletType switch
                 {
-                    WalletType.EVM => RecoverEvmAddress(message, signatureHex),
-                    WalletType.TRON => await VerifyTronSignatureWithNode(message, signatureHex, walletAddress),
+                    WalletType.BEP20 => RecoverEvmAddress(message, signatureHex),
+                    WalletType.ERC20 => RecoverEvmAddress(message, signatureHex),
+                    WalletType.TRC20 => await VerifyTronSignatureWithNode(message, signatureHex, walletAddress),
                     _ => throw new BadRequestException("Invalid wallet type")
                 };
 
@@ -369,8 +373,8 @@ namespace CoinBank.Services._User
         /// <param name="tabletUniqeId"></param>
         /// <param name="tabletData"></param>
         /// <returns></returns>
-        private ActionResult Authenticate(User user)
-           => new JsonResult(_jwtService.Generate(GetClaimsAsync(user)));
+        private ActionResult Authenticate(User user, WalletType walletType, string wallet)
+           => new JsonResult(_jwtService.Generate(GetClaimsAsync(user, walletType,wallet)));
 
 
         /// <summary>
@@ -380,7 +384,7 @@ namespace CoinBank.Services._User
         /// <param name="tabletData"></param>
         /// <returns></returns>
         /// <exception cref="BaseException"></exception>
-        private IEnumerable<Claim> GetClaimsAsync(User user)
+        private IEnumerable<Claim> GetClaimsAsync(User user, WalletType walletType, string wallet)
         {
             try
             {
@@ -388,6 +392,8 @@ namespace CoinBank.Services._User
              {
                  new(Claims.EVMWalletAddress.ToDisplay(),user.EVMWalletAddress ?? "no wallet"),
                  new(Claims.TronWalletAddress.ToDisplay(),user.TronWalletAddress ?? "no wallet"),
+                 new(Claims.WalletAddress.ToDisplay(),wallet ?? "no wallet"),
+                 new(Claims.NetworkType.ToDisplay(),walletType == WalletType.BEP20? "BEP20":walletType == WalletType.ERC20?"ERC20":"TRC20"),
                  new(Claims.PublicKey.ToDisplay(),user.UserPublicKey.ToString()),
                  new(Claims.SecurityStamp.ToDisplay(),user.SecurityStamp.ToString()),
                  new(Claims.UserStatus.ToDisplay(),user.Status.ToString()),
@@ -396,7 +402,6 @@ namespace CoinBank.Services._User
 
                 if (user.Permissions != null && user.Permissions.Any())
                 {
-
                     claims.AddRange(user.Permissions.Select(permission =>
                         new Claim(Claims.Permission.ToDisplay(), permission)));
                 }
@@ -421,11 +426,11 @@ namespace CoinBank.Services._User
             walletAddress = walletAddress.Trim();
 
             var query = _userRepository.AsQueryable();
-            if (walletType == WalletType.EVM)
+            if (walletType == WalletType.BEP20 || walletType == WalletType.ERC20)
             {
                 query = query.Where(u => u.EVMWalletAddress.ToLower() == walletAddress.ToLower());
             }
-            else if (walletType == WalletType.TRON)
+            else if (walletType == WalletType.TRC20)
             {
                 query = query.Where(u => u.TronWalletAddress.ToLower() == walletAddress.ToLower());
             }
@@ -444,8 +449,8 @@ namespace CoinBank.Services._User
                     Status = UserStatus.Active,
                     LoginDates = []
                 };
-                if (walletType == WalletType.EVM) user.EVMWalletAddress = walletAddress;
-                else if (walletType == WalletType.TRON) user.TronWalletAddress = walletAddress;
+                if (walletType == WalletType.BEP20 || walletType == WalletType.ERC20) user.EVMWalletAddress = walletAddress;
+                else if (walletType == WalletType.TRC20) user.TronWalletAddress = walletAddress;
                 else throw new BadRequestException("Invalid wallet type!");
                 await _userRepository.InsertOneAsync(user);
             }
@@ -494,7 +499,7 @@ namespace CoinBank.Services._User
 
         private string ValidateAndConvertToChecksumAddress(string address, WalletType walletType)
         {
-            if (walletType == WalletType.EVM)
+            if (walletType == WalletType.BEP20 || walletType == WalletType.ERC20)
             {
                 var addressUtil = new AddressUtil();
                 if (!addressUtil.IsValidAddressLength(address) || !addressUtil.IsChecksumAddress(address) && !address.ToLower().Equals(address))
@@ -507,7 +512,7 @@ namespace CoinBank.Services._User
                 }
                 return address;
             }
-            else if (walletType == WalletType.TRON)
+            else if (walletType == WalletType.TRC20)
             {
                 try
                 {
