@@ -251,45 +251,7 @@ namespace CoinBank.Services._BlockChain
             }
         }
 
-        public async Task<BigInteger> GetLiquidityBalanceAsync(string tokenName, string network)
-        {
-            if (string.IsNullOrWhiteSpace(tokenName))
-                throw new BadRequestException("Token name is required.");
-
-            if (string.IsNullOrWhiteSpace(network))
-                throw new BadRequestException("Network is required.");
-
-            try
-            {
-                var token = ValidateToken(tokenName, network);
-                var web3 = GetWeb3(network);
-                var contractAddress = GetSwapContractAddress(network);
-
-                var contract = web3.Eth.GetContract(SwapAbi, contractAddress);
-                var function = contract.GetFunction("getLiquidityBalance");
-
-                var result = await function.CallAsync<BigInteger>(token.Address);
-
-                //_logger.LogInformation(
-                //    "GetLiquidityBalance | Network: {Network} | Token: {Token} | Balance: {Balance}",
-                //    network,
-                //    token.Name,
-                //    result);
-
-                return result;
-            }
-            catch (SmartContractRevertException revertEx)
-            {
-                _logger.LogError(revertEx, "Contract revert in getLiquidityBalance: {Message}", revertEx.Message);
-                throw;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error in GetLiquidityBalanceAsync");
-                throw;
-            }
-        }
-
+     
         private object[] MapVestingData(List<PreSaleReleaseStep> releaseSchedule)
         {
             if (releaseSchedule == null || !releaseSchedule.Any())
@@ -440,7 +402,8 @@ namespace CoinBank.Services._BlockChain
                     update.DestinationTokenAddress,
                     update.SourceAmoutInWei,
                     BigInteger.Zero,
-                    update.DestinationWallet
+                    update.DestinationWallet,
+                    BuildBscPath(update.SourceTokenAddress, update.DestinationTokenAddress)
                 };
 
                 var options = BuildLzOptions();
@@ -513,7 +476,8 @@ namespace CoinBank.Services._BlockChain
                 var result = await function.CallAsync<BigInteger>(
                     update.SourceTokenAddress,
                     update.SourceAmountInWei,
-                    update.DestinationTokenAddress
+                    update.DestinationTokenAddress,
+                    BuildBscPath(update.SourceTokenAddress, update.DestinationTokenAddress)
                 );
 
                 _logger.LogInformation(
@@ -551,6 +515,47 @@ namespace CoinBank.Services._BlockChain
                 .HexToByteArray(hex);
         }
 
+
+        public async Task<BigInteger> GetLiquidityBalanceAsync(string tokenName, string network)
+        {
+            if (string.IsNullOrWhiteSpace(tokenName))
+                throw new BadRequestException("Token name is required.");
+
+            if (string.IsNullOrWhiteSpace(network))
+                throw new BadRequestException("Network is required.");
+
+            try
+            {
+                var token = ValidateToken(tokenName, network);
+                var web3 = GetWeb3(network);
+                var contractAddress = GetSwapContractAddress(network);
+
+                var contract = web3.Eth.GetContract(SwapAbi, contractAddress);
+                var function = contract.GetFunction("getLiquidityBalance");
+
+                var result = await function.CallAsync<BigInteger>(token.Address);
+
+                //_logger.LogInformation(
+                //    "GetLiquidityBalance | Network: {Network} | Token: {Token} | Balance: {Balance}",
+                //    network,
+                //    token.Name,
+                //    result);
+
+                return result;
+            }
+            catch (SmartContractRevertException revertEx)
+            {
+                _logger.LogError(revertEx, "Contract revert in getLiquidityBalance: {Message}", revertEx.Message);
+                throw;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error in GetLiquidityBalanceAsync");
+                throw;
+            }
+        }
+
+
         public uint MapNetworkToEid(string network)
         {
             return network?.ToUpper() switch
@@ -572,7 +577,7 @@ namespace CoinBank.Services._BlockChain
                 _ => throw new BadRequestException($"Unsupported network: {network}")
             };
         }
-       
+
         private Web3 GetWeb3(string network)
         {
             return network?.ToUpper() switch
@@ -582,6 +587,106 @@ namespace CoinBank.Services._BlockChain
                 "BEP20" => _bep20Web3,
                 _ => throw new BadRequestException($"Unsupported network: {network}")
             };
+        }
+
+        private string[] BuildBscPath(string sourceTokenAddress, string destinationTokenAddress)
+        {
+            if (string.IsNullOrWhiteSpace(sourceTokenAddress) || string.IsNullOrWhiteSpace(destinationTokenAddress))
+                return new string[] { sourceTokenAddress ?? destinationTokenAddress };
+
+            var srcAddress = sourceTokenAddress.Trim();
+            var dstAddress = destinationTokenAddress.Trim();
+
+            // common BSC addresses
+            const string USDT = "0x55d398326f99059fF775485246999027B3197955"; // USDT
+            const string USDC = "0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d"; // USDC
+            const string WBNB = "0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c"; // WBNB
+
+            var srcToken = _availableTokenData.FirstOrDefault(t => string.Equals(t.Address, srcAddress, StringComparison.OrdinalIgnoreCase)) ??
+                throw new NotFoundException();
+
+            var dstToken = _availableTokenData.FirstOrDefault(t => string.Equals(t.Address, dstAddress, StringComparison.OrdinalIgnoreCase)) ??
+                throw new NotFoundException();
+
+            // if both already BEP20
+            var srcIsBep = string.Equals(srcToken.Network, "BEP20", StringComparison.OrdinalIgnoreCase);
+            var dstIsBep = string.Equals(dstToken.Network, "BEP20", StringComparison.OrdinalIgnoreCase);
+
+            // utility to find BEP20 counterpart by name
+            string FindBepByName(string name)
+            {
+                if (string.IsNullOrEmpty(name)) return null;
+                var match = _availableTokenData.FirstOrDefault(t => string.Equals(t.Name, name, StringComparison.OrdinalIgnoreCase) && string.Equals(t.Network, "BEP20", StringComparison.OrdinalIgnoreCase));
+                return match?.Address;
+            }
+
+            // If both on BEP20
+            if (srcIsBep && dstIsBep)
+            {
+                // if either is USDT -> direct
+                if (string.Equals(srcToken.Address, USDT, StringComparison.OrdinalIgnoreCase) || string.Equals(dstToken.Address, USDT, StringComparison.OrdinalIgnoreCase))
+                {
+                    return new[] { srcAddress, dstAddress };
+                }
+
+                // otherwise route via WBNB
+                return new[] { srcAddress, WBNB, dstAddress };
+            }
+
+            // If networks differ (one or both not BEP20)
+            // Strategy:
+            // 1. Map non-BEP token to its BEP20 counterpart ( USDT on other network -> USDT on BSC)
+            // 2. Build path on BSC: prefer [srcBep, USDC, WBNB, dstBep] avoiding duplicates
+
+            // map src to bep20 if needed
+            string srcBepAddress = srcAddress;
+            if (!srcIsBep)
+            {
+                // find BEP version by name
+                var bep = FindBepByName(srcToken.Name);
+                if (!string.IsNullOrEmpty(bep)) srcBepAddress = bep;
+            }
+
+            // map dst to bep20 if needed
+            string dstBepAddress = dstAddress;
+            if (!dstIsBep)
+            {
+                var bep = FindBepByName(dstToken.Name);
+                if (!string.IsNullOrEmpty(bep)) dstBepAddress = bep;
+            }
+
+            // ensure we have bep addresses for both, fallback to originals
+            var path = new List<string>();
+            path.Add(srcBepAddress);
+
+            // Insert USDC if not already present and not equal to src
+            if (!string.Equals(srcBepAddress, USDC, StringComparison.OrdinalIgnoreCase) && !string.Equals(dstBepAddress, USDC, StringComparison.OrdinalIgnoreCase))
+            {
+                path.Add(USDC);
+            }
+
+            // then WBNB
+            if (!string.Equals(path.Last(), WBNB, StringComparison.OrdinalIgnoreCase) && !string.Equals(dstBepAddress, WBNB, StringComparison.OrdinalIgnoreCase))
+            {
+                path.Add(WBNB);
+            }
+
+            // finally destination
+            if (!string.Equals(path.Last(), dstBepAddress, StringComparison.OrdinalIgnoreCase))
+                path.Add(dstBepAddress);
+
+            // remove any nulls and duplicates in sequence
+            var final = path.Where(a => !string.IsNullOrEmpty(a)).Select(a => a).ToList();
+
+            // normalize duplicates adjacent
+            var dedup = new List<string>();
+            foreach (var a in final)
+            {
+                if (dedup.Count == 0 || !string.Equals(dedup.Last(), a, StringComparison.OrdinalIgnoreCase))
+                    dedup.Add(a);
+            }
+
+            return dedup.ToArray();
         }
 
         #endregion
