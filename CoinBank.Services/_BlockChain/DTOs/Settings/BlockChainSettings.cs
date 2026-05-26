@@ -33,6 +33,8 @@ namespace CoinBank.Services._BlockChain.DTOs.Settings
         public string TRC20SwapContractAddress { get; set; }
         public string BEP20SwapContractAddress { get; set; }
 
+
+
         public string DefaultGasLimit { get; set; }
         public string DefaultGasPriceGwei { get; set; }
         public string MinGasPriceGwei { get; set; }

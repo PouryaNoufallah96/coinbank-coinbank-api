@@ -2,13 +2,17 @@
 using CoinBank.Domain.Repositories.Contracts;
 using CoinBank.Services._BlockChain;
 using CoinBank.Services._Common.DTOs.Settings;
+using CoinBank.Services._Common.Services;
 using CoinBank.Services._Price;
 using CoinBank.Services._Stake.DTOs.Results;
 using CoinBank.Services._Stake.DTOs.Settings;
 using CoinBank.Services._Stake.DTOs.Updates;
+using CoinBank.Services._Transaction._Hub;
 using CoinBank.Services._Withdrawal.DTOs.Results;
+using Microsoft.AspNetCore.SignalR;
 using MongoDB.Driver;
 using MongoDB.Driver.Linq;
+using System.Security.Cryptography;
 using Utilities.Exceptions.Common;
 using Utilities.Utilities;
 using static Utilities.Constants.RegisterMode;
@@ -19,6 +23,7 @@ namespace CoinBank.Services._Stake
         StakeSetting _stakeSetting,
         AvailableTokensSettings _availableTokenData,
         IPriceService _priceService,
+        IHubContext<WalletNotifyHub> _hubContext,
         IWithdrawalRepository _withdrawalRepository,
         IBlockChainService _blockChainService)
         : IStakeService, IScopedDependency
@@ -32,14 +37,18 @@ namespace CoinBank.Services._Stake
         /// <param name="evmWalletAddress"></param>
         /// <returns></returns>
         /// <exception cref="BadRequestException"></exception>
-        public async Task<StakeResult> CreateStakeAsync(CreateStakeUpdate update, string publicKey, string evmWalletAddress)
+        public async Task<StakeResult> CreateStakeAsync(CreateStakeUpdate update, string walletAddress, string walletNetwork)
         {
             if (update == null)
                 throw new BadRequestException("Request body is required");
 
+            var network = walletNetwork.ToUpper();
 
             var symbol = update.Symbol.Trim().ToUpper();
             var tokenData = ValidateToken(symbol);
+            if (tokenData.Network != network) throw new BadRequestException($"Please Sign with {tokenData.Network} Network with your wallet");
+
+
 
             if (!_stakeSetting.AllowedTokensSymbol
                 .Any(s => s.Equals(symbol, StringComparison.OrdinalIgnoreCase)))
@@ -51,8 +60,18 @@ namespace CoinBank.Services._Stake
                 .FirstOrDefault(p => p.DurationInMonths == update.Duration)
                 ?? throw new BadRequestException("Invalid staking duration. Allowed durations are based on configured plans 12 and 24 month");
 
+            var tokenBalance = 0m;
 
-            var tokenBalance = await _blockChainService.GetBEP20WalletAddressSingleTokenBalanceAsync(evmWalletAddress, symbol);
+            if (network == "BEP20")
+            {
+                tokenBalance = await _blockChainService.GetBEP20WalletAddressSingleTokenBalanceAsync(walletAddress, symbol);
+            }
+            else
+            {
+                tokenBalance = await _blockChainService.GetERC20WalletAddressSingleTokenBalanceAsync(walletAddress, symbol);
+
+            }
+
             if (tokenBalance < update.Amount)
                 throw new BadRequestException($"Insufficient {symbol} balance!");
 
@@ -62,14 +81,13 @@ namespace CoinBank.Services._Stake
             var start = DateTime.UtcNow;
             var end = start.AddMonths(update.Duration);
 
-            var reference = Guid.NewGuid().ToString("N");
+            var reference = IdGenerartor.GenerateBytes32HexId();
             var tokenPrice = await _priceService.GetOneTokenPriceForInternalUsageAsync(symbol);
 
             var stake = new Stake
             {
                 StakeReference = reference,
-                UserPublicKey = publicKey,
-                WalletAddress = evmWalletAddress,
+                WalletAddress = walletAddress,
                 TokenSymbol = symbol,
                 TokenAmount = update.Amount,
                 StartAmount = update.Amount,
@@ -80,7 +98,7 @@ namespace CoinBank.Services._Stake
                 MonthDuration = update.Duration,
                 StartMoment = start,
                 EndMoment = end,
-                TokenNetworkName = tokenData.Network,
+                TokenNetworkName = network,
                 TotalProfitWithdrawn = 0,
                 State = StakeState.NotRegistered
             };
@@ -97,7 +115,7 @@ namespace CoinBank.Services._Stake
         /// <param name="publicKey"></param>
         /// <param name="evmWalletAddress"></param>
         /// <returns></returns>
-        public async Task<StakeListResult> GetStakeHistoryAsync(StakeHistoryUpdate update, string publicKey, string evmWalletAddress)
+        public async Task<StakeListResult> GetStakeHistoryAsync(StakeHistoryUpdate update, string evmWalletAddress)
         {
             var query = _stakeRepository.AsQueryable().Where(q => q.State != StakeState.NotRegistered);
 
@@ -106,16 +124,8 @@ namespace CoinBank.Services._Stake
                 query = query.Where(q => q.TokenSymbol == update.Symbol.ToUpper());
             }
 
-            if (string.IsNullOrWhiteSpace(publicKey) || publicKey == "guess")
-            {
-                query = query.Where(x =>
-                    x.WalletAddress == evmWalletAddress);
-            }
-            else
-            {
-                query = query.Where(x =>
-                    x.UserPublicKey == publicKey);
-            }
+            query = query.Where(x =>
+                x.WalletAddress == evmWalletAddress);
 
             var totalCount = await query.CountAsync();
 
@@ -147,20 +157,13 @@ namespace CoinBank.Services._Stake
         /// <param name="evmWalletAddress"></param>
         /// <returns></returns>
         /// <exception cref="NotImplementedException"></exception>
-        public async Task<List<StakeWalletStatsResult>> GetWalletStatsAsync(GetStakeWalletStatsUpdate update, string publicKey, string evmWalletAddress)
+        public async Task<List<StakeWalletStatsResult>> GetWalletStatsAsync(GetStakeWalletStatsUpdate update, string evmWalletAddress)
         {
-            var query = _stakeRepository.AsQueryable().Where(q => q.State != StakeState.NotRegistered);
+            var query = _stakeRepository.AsQueryable()
+                .Where(q => q.State != StakeState.NotRegistered);
 
-            if (string.IsNullOrWhiteSpace(publicKey) || publicKey == "guess")
-            {
-                query = query.Where(x =>
-                    x.WalletAddress == evmWalletAddress);
-            }
-            else
-            {
-                query = query.Where(x =>
-                    x.UserPublicKey == publicKey);
-            }
+            query = query.Where(x =>
+                x.WalletAddress == evmWalletAddress);
 
             if (update.ShouldGrouped)
             {
@@ -172,7 +175,12 @@ namespace CoinBank.Services._Stake
                         Name = g.First().TokenName,
 
                         TokenAmount = g.Sum(x => x.TokenAmount),
-                        StakeCount = g.Count()
+                        StakeCount = g.Count(),
+                        TotalDeposit = g.Sum(x => x.StartAmount),
+
+                        FinalProfitAmount = g.Sum(x =>
+                            (x.TotalProfitOfAmountWithdrawn + x.TotalProfitWithdrawn)
+                            - x.TotalCostOfAmountWithdrawn)
                     })
                     .ToListAsync();
 
@@ -186,13 +194,18 @@ namespace CoinBank.Services._Stake
                     Name = x.TokenName,
 
                     TokenAmount = x.TokenAmount,
-                    StakeCount = 1
+                    StakeCount = 1,
+
+                    TotalDeposit = x.StartAmount,
+
+                    FinalProfitAmount =
+                        (x.TotalProfitOfAmountWithdrawn + x.TotalProfitWithdrawn)
+                        - x.TotalCostOfAmountWithdrawn
                 })
                 .ToListAsync();
 
             return list;
         }
-
 
 
         /// <summary>
@@ -204,23 +217,15 @@ namespace CoinBank.Services._Stake
         /// <returns></returns>
         /// <exception cref="NotFoundException"></exception>
         /// <exception cref="BadRequestException"></exception>
-        public async Task<StakeDetailResult> GetStakeDetailAsync( StakeDetailUpdate update, string publicKey, string evmWalletAddress)
+        public async Task<StakeDetailResult> GetStakeDetailAsync(StakeDetailUpdate update, string evmWalletAddress)
         {
-            
+
             var stake = await _stakeRepository.AsQueryable()
                 .FirstOrDefaultAsync(q => q.StakeReference == update.StakeReference)
                 ?? throw new NotFoundException("Stake not found!");
 
-            if (!string.IsNullOrWhiteSpace(publicKey) && publicKey != "guess")
-            {
-                if (stake.UserPublicKey != publicKey) throw new BadRequestException("Access denied");
-            }
-            else
-            {
-                if (stake.WalletAddress != evmWalletAddress)
-                    throw new BadRequestException("Access denied");
-            }
-
+            if (stake.WalletAddress != evmWalletAddress)
+                throw new BadRequestException("Access denied");
 
             var result = ConvertToDetailResult(stake);
 
@@ -236,20 +241,12 @@ namespace CoinBank.Services._Stake
 
             var profitStartDate = lastStakeWithdrawal?.RegisterMoment ?? stake.StartMoment;
 
-            var passedMonths = GetPassedFullMonths(profitStartDate, now);
-            decimal availableProfit = 0;
-
-            if (passedMonths > 0)
-            {
-                var monthlyProfit =
-                    stake.TokenAmount * (stake.EachMonthProfitPercent / 100m);
-
-                availableProfit = monthlyProfit * passedMonths;
-            }
-
+            var availableProfitInWei = await _blockChainService.StakeBEP20PreviewAccruedProfitAsync(stake.StakeReference);
+            var token = ValidateToken(stake.TokenSymbol);
+            var availableProfit = _blockChainService.ConvertFromWei(availableProfitInWei, token.PriceDecimalPlaces);
             result.AvailableProfitForWithdraw = availableProfit;
 
-          
+
             var withdrawals = await _withdrawalRepository.AsQueryable()
                 .Where(w => w.StakeReference == stake.StakeReference)
                 .OrderByDescending(w => w.CreatedMoment)
@@ -258,7 +255,6 @@ namespace CoinBank.Services._Stake
             result.Withrawals = withdrawals.Select(w => new WithdrawalResult
             {
                 WithdrawalRerefence = w.WithdrawalRerefence,
-                UserPublicKey = w.UserPublicKey,
                 WalletAddress = w.WalletAddress,
                 Symbol = w.Symbol,
                 Network = w.Network,
@@ -266,16 +262,85 @@ namespace CoinBank.Services._Stake
                 ProfitAmount = w.ProfitAmount,
                 Cost = w.Cost,
                 FinalAmount = w.FinalAmount,
-                FinalAmountInWei = w.FinalAmountInWei,
                 Type = w.Type,
                 State = w.State,
-                CreatedMoment =  w.CreatedMoment,
+                CreatedMoment = w.CreatedMoment,
                 ModifiedMoment = w.ModifiedMoment
-            }).ToList(); 
+            }).ToList();
 
             return result;
         }
 
+
+        /// <summary>
+        /// use for activate stake
+        /// </summary>
+        /// <param name="depositRef"></param>
+        /// <param name="hash"></param>
+        /// <returns></returns>
+        public async Task ActivateStakeAsync(string depositRef, string hash)
+        {
+            var filter = Builders<Stake>.Filter.And(
+                Builders<Stake>.Filter.Eq(x => x.StakeReference, depositRef),
+                Builders<Stake>.Filter.Eq(x => x.State, StakeState.NotRegistered)
+            );
+
+            var update = Builders<Stake>.Update
+                .Set(x => x.RegisterHash, hash)
+                .Set(x => x.RegisterMoment, DateTime.UtcNow)
+                .Set(x => x.State, StakeState.Active);
+
+            var options = new FindOneAndUpdateOptions<Stake>
+            {
+                ReturnDocument = ReturnDocument.After
+            };
+
+            var stake = await _stakeRepository.FindOneAndUpdateWithOptionAsync(filter, update, options);
+
+            if (stake == null)
+                return;
+
+            var shortHash = hash[..10];
+
+            await _hubContext.Clients
+                .Group(stake.WalletAddress)
+                .SendAsync(
+                    "PaymentMessage",
+                    $"Your Deposit Activated {stake.TokenSymbol}: {shortHash}"
+                );
+        }
+
+
+        /// <summary>
+        /// use for remove not registered stakes 
+        /// </summary>
+        /// <returns></returns>
+        public async Task RemoveNotRegisteredStakesAsync()
+        {
+            var oneWeekAgo = DateTime.UtcNow.AddDays(-7);
+            var query = _stakeRepository.AsQueryable();
+            var stakesToDelete = await query
+                .Where(x =>
+                    x.RegisterHash == null &&
+                    x.State == StakeState.NotRegistered &&
+                    x.CreatedMoment <= oneWeekAgo)
+                .ToListAsync();
+
+            if (stakesToDelete == null || stakesToDelete.Count == 0)
+                return;
+
+            var ids = stakesToDelete.Select(x => x.Id).ToList();
+
+            await _stakeRepository.DeleteManyAsync(x => ids.Contains(x.Id));
+        }
+
+
+        /// <summary>
+        /// use for getting passed full months
+        /// </summary>
+        /// <param name="start"></param>
+        /// <param name="now"></param>
+        /// <returns></returns>
         private int GetPassedFullMonths(DateTime start, DateTime now)
         {
             int months = (now.Year - start.Year) * 12 + (now.Month - start.Month);
@@ -286,6 +351,12 @@ namespace CoinBank.Services._Stake
             return Math.Max(0, months);
         }
 
+        private int GetPassedTestMonths(DateTime start, DateTime now)
+        {
+            var passedMinutes = (now - start).TotalMinutes;
+
+            return Math.Max(0, (int)passedMinutes);
+        }
 
 
         /// <summary>
@@ -293,16 +364,16 @@ namespace CoinBank.Services._Stake
         /// </summary>
         /// <param name="stake"></param>
         /// <returns></returns>
-        public StakeResult ConvertToResult(Stake stake)
+        private StakeResult ConvertToResult(Stake stake)
         {
 
             return new StakeResult
             {
                 StakeReference = stake.StakeReference,
-                UserPublicKey = stake.UserPublicKey,
                 WalletAddress = stake.WalletAddress,
                 TokenSymbol = stake.TokenSymbol,
                 TokenName = stake.TokenName,
+                StartAmount = stake.StartAmount,
                 TokenAmount = stake.TokenAmount,
                 TokenPrice = stake.TokenPrice,
                 MonthDuration = stake.MonthDuration,
@@ -310,6 +381,8 @@ namespace CoinBank.Services._Stake
                 EndMoment = stake.EndMoment,
                 TotalProfitWithdrawn = stake.TotalProfitWithdrawn,
                 TotalAmountWithdrawn = stake.TotalAmountWithdrawn,
+                TotalCostOfAmountWithdrawn = stake.TotalCostOfAmountWithdrawn,
+                TotalProfitOfAmountWithdrawn = stake.TotalProfitOfAmountWithdrawn,
                 State = stake.State,
                 EachMonthProfit = stake.EachMonthProfit,
                 EachMonthProfitPercent = stake.EachMonthProfitPercent,
@@ -318,16 +391,17 @@ namespace CoinBank.Services._Stake
             };
 
         }
-        public StakeDetailResult ConvertToDetailResult(Stake stake)
+
+        private StakeDetailResult ConvertToDetailResult(Stake stake)
         {
 
             return new StakeDetailResult
             {
                 StakeReference = stake.StakeReference,
-                UserPublicKey = stake.UserPublicKey,
                 WalletAddress = stake.WalletAddress,
                 TokenSymbol = stake.TokenSymbol,
                 TokenName = stake.TokenName,
+                StartAmount = stake.StartAmount,
                 TokenAmount = stake.TokenAmount,
                 TokenPrice = stake.TokenPrice,
                 MonthDuration = stake.MonthDuration,
@@ -335,6 +409,8 @@ namespace CoinBank.Services._Stake
                 EndMoment = stake.EndMoment,
                 TotalProfitWithdrawn = stake.TotalProfitWithdrawn,
                 TotalAmountWithdrawn = stake.TotalAmountWithdrawn,
+                TotalCostOfAmountWithdrawn = stake.TotalCostOfAmountWithdrawn,
+                TotalProfitOfAmountWithdrawn = stake.TotalProfitOfAmountWithdrawn,
                 State = stake.State,
                 EachMonthProfit = stake.EachMonthProfit,
                 EachMonthProfitPercent = stake.EachMonthProfitPercent,
@@ -358,6 +434,8 @@ namespace CoinBank.Services._Stake
             return tokenData;
         }
 
+
        
+
     }
 }

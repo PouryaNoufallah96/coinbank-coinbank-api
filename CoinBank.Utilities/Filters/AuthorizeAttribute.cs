@@ -11,7 +11,8 @@ namespace Utilities.Filters
     {
         private readonly string[] _claims;
         public bool RequireActiveUser { get; set; } = false;
-        public bool RequireActiveWithEVMWallet { get; set; } = false;
+        public bool RequireActiveWithBEP20Wallet { get; set; } = false;
+        public bool JustBSC { get; set; } = false;
         public AuthorizeAttribute()
         {
         }
@@ -31,7 +32,7 @@ namespace Utilities.Filters
             if (_claims != null && !_claims.Any(c => jwtSecurityToken.HasClaim(Claims.Permission.ToDisplay(), c)))
                 throw new AuthorizationException( "Access denied");
 
-            if (RequireActiveUser || RequireActiveWithEVMWallet)
+            if (RequireActiveUser || RequireActiveWithBEP20Wallet)
             {
                 var statusClaim = jwtSecurityToken.Claims
                     .FirstOrDefault(c => c.Type == Claims.UserStatus.ToDisplay());
@@ -40,15 +41,16 @@ namespace Utilities.Filters
                     throw new AuthorizationException("User is not active");
             }
 
-            if (RequireActiveWithEVMWallet)
+            if (RequireActiveWithBEP20Wallet || JustBSC)
             {
-                var evmWalletClaim = jwtSecurityToken.Claims
-                    .FirstOrDefault(c => c.Type == Claims.EVMWalletAddress.ToDisplay());
+                var networkClaim = jwtSecurityToken.Claims
+                    .FirstOrDefault(c => c.Type == Claims.NetworkType.ToDisplay());
 
-                if (evmWalletClaim == null || string.IsNullOrWhiteSpace(evmWalletClaim.Value))
-                    throw new AuthorizationException("EVM wallet is required");
+                if (networkClaim == null || networkClaim.ToString() != "BEP20")
+                    throw new AuthorizationException("BSC wallet is required");
             }
 
+           
         }
     }
 }
