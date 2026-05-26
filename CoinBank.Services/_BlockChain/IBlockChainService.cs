@@ -31,6 +31,10 @@ namespace CoinBank.Services._BlockChain
         Task<decimal> GetTRC20UsdtBalanceAsync(string walletAddress);
 
 
+        //stake methods
+        Task<BigInteger> StakeBEP20PreviewAccruedProfitAsync(string depositId);
+       
+
 
         // Utility Methods
         decimal ConvertFromWei(BigInteger weiAmount, int decimals = 18);

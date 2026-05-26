@@ -2,9 +2,11 @@
 using CoinBank.Domain.Repositories.Contracts;
 using CoinBank.Services._Common.DTOs.Settings;
 using CoinBank.Services._PreSaleOrder;
+using CoinBank.Services._Stake;
 using CoinBank.Services._Swap;
 using CoinBank.Services._Transaction._Hub;
 using CoinBank.Services._Transaction.DTOs.Updates;
+using CoinBank.Services._Withdrawal;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Logging;
 using MongoDB.Driver.Linq;
@@ -20,6 +22,8 @@ namespace CoinBank.Services._Transaction
         ILogger<TransactionLogService> _logger,
         IPreSaleOrderService _preSaleOrderService,
         ISwapService _swapService,
+        IWithdrawalService _withdrawalService,
+        IStakeService _stakeService,
         AvailableTokensSettings _availableTokenData,
         IHubContext<WalletNotifyHub> _hubContext) : ITransactionLogService, IScopedDependency
     {
@@ -431,6 +435,198 @@ namespace CoinBank.Services._Transaction
         #endregion
 
 
+
+
+        #region Stake
+
+        public async Task CreateDepositCreatedLogAsync(DepositCreatedLog input)
+        {
+            try
+            {
+                var existsLog = await _transactionLogRepository.AsQueryable()
+                    .Where(q =>
+                        q.Hash.ToLower() == input.Hash.ToLower() &&
+                        q.Reference.ToLower() == input.DepositId.ToLower() &&
+                        q.EventType == BlockchainEventType.DepositCreated)
+                    .FirstOrDefaultAsync();
+
+                if (existsLog != null)
+                {
+                    _logger.LogWarning(
+                        "Duplicate DepositCreated log detected for DepositId {DepositId}. Skipping insertion. Hash: {Hash}",
+                        input.DepositId, input.Hash);
+                    return;
+                }
+
+                var newLog = new TransactionLog
+                {
+                    Hash = input.Hash,
+                    Wallet = input.Depositor,
+                    BlockNumber = (decimal)input.BlockNumber,
+                    EventType = BlockchainEventType.DepositCreated,
+                    Status = TransactionStatus.Confirmed,
+                    Network = input.Network,
+                    Reference = input.DepositId,
+                    TokenAddress = input.Token,
+                    Data = SerializeData(input)
+                };
+
+                await _transactionLogRepository.InsertOneAsync(newLog);
+                await _stakeService.ActivateStakeAsync(input.DepositId, input.Hash);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error while creating DepositCreated transaction log.");
+            }
+        }
+
+        public async Task CreateEarlyWithdrawnLogAsync(EarlyWithdrawnLog input)
+        {
+            try
+            {
+                var existsLog = await _transactionLogRepository.AsQueryable()
+                    .Where(q =>
+                        q.Hash.ToLower() == input.Hash.ToLower() &&
+                        q.Reference.ToLower() == input.DepositId.ToLower() &&
+                        q.EventType == BlockchainEventType.EarlyWithdrawn)
+                    .FirstOrDefaultAsync();
+
+                if (existsLog != null)
+                {
+                    _logger.LogWarning(
+                        "Duplicate EarlyWithdrawn log detected for DepositId {DepositId}. Skipping insertion. Hash: {Hash}",
+                        input.DepositId, input.Hash);
+                    return;
+                }
+
+                var newLog = new TransactionLog
+                {
+                    Hash = input.Hash,
+                    Wallet = input.Depositor,
+                    BlockNumber = (decimal)input.BlockNumber,
+                    EventType = BlockchainEventType.EarlyWithdrawn,
+                    Status = TransactionStatus.Confirmed,
+                    Network = input.Network,
+
+                    Reference = input.DepositId,
+                    Data = SerializeData(input)
+                };
+
+                await _transactionLogRepository.InsertOneAsync(newLog);
+                await _withdrawalService.CreateEarlyWithdrawnByEventAsync(input.DepositId, input.Hash, input.WithdrawAmount, input.ProfitAmount, input.ClaimedProfitAmount);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error while creating EarlyWithdrawn transaction log.");
+            }
+        }
+
+        public async Task CreateProfitWithdrawnLogAsync(ProfitWithdrawnLog input)
+        {
+            try
+            {
+                var existsLog = await _transactionLogRepository.AsQueryable()
+                    .Where(q =>
+                        q.Hash.ToLower() == input.Hash.ToLower() &&
+                        q.Reference.ToLower() == input.DepositId.ToLower() &&
+                        q.EventType == BlockchainEventType.ProfitWithdrawn)
+                    .FirstOrDefaultAsync();
+
+                if (existsLog != null)
+                {
+                    _logger.LogWarning(
+                        "Duplicate ProfitWithdrawn log detected for DepositId {DepositId}. Skipping insertion. Hash: {Hash}",
+                        input.DepositId, input.Hash);
+                    return;
+                }
+
+                var newLog = new TransactionLog
+                {
+                    Hash = input.Hash,
+                    Wallet = input.Depositor,
+                    BlockNumber = (decimal)input.BlockNumber,
+                    EventType = BlockchainEventType.ProfitWithdrawn,
+                    Status = TransactionStatus.Confirmed,
+                    Network = input.Network,
+
+                    Reference = input.DepositId,
+                    TokenAddress = input.Token,
+
+                    Data = SerializeData(input)
+                };
+
+                await _transactionLogRepository.InsertOneAsync(newLog);
+                await _withdrawalService.CreateProfitWithdrawaByEventAsycn(input.DepositId, input.Profit, input.Hash);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error while creating ProfitWithdrawn transaction log.");
+            }
+        }
+
+        public async Task CreateWithdrawnLogAsync(WithdrawnLog input)
+        {
+            try
+            {
+                var existsLog = await _transactionLogRepository.AsQueryable()
+                    .Where(q =>
+                        q.Hash.ToLower() == input.Hash.ToLower() &&
+                        q.Reference.ToLower() == input.DepositId.ToLower() &&
+                        q.EventType == BlockchainEventType.WithdrawnAll)
+                    .FirstOrDefaultAsync();
+
+                if (existsLog != null)
+                {
+                    _logger.LogWarning(
+                        "Duplicate Withdrawn log detected for DepositId {DepositId}. Skipping insertion. Hash: {Hash}",
+                        input.DepositId, input.Hash);
+                    return;
+                }
+
+                var newLog = new TransactionLog
+                {
+                    Hash = input.Hash,
+                    Wallet = input.Depositor,
+                    BlockNumber = (decimal)input.BlockNumber,
+                    EventType = BlockchainEventType.WithdrawnAll,
+                    Status = TransactionStatus.Confirmed,
+                    Network = input.Network,
+
+                    Reference = input.DepositId,
+
+                    Data = SerializeData(input)
+                };
+
+                await _transactionLogRepository.InsertOneAsync(newLog);
+                await _withdrawalService.CreateWithdrawnAllByEventAsync(input.DepositId, input.Hash, input.Principal, input.Profit);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error while creating Withdrawn transaction log.");
+            }
+        }
+
+        public async Task<BigInteger> GetDepositLastCheckedBlockNumberAsync(string network = "BEP20")
+        {
+            var lastBlock = await _transactionLogRepository
+                .AsQueryable()
+                .Where(h =>
+                    h.Network == network &&
+                    (
+                        h.EventType == BlockchainEventType.DepositCreated
+                    ))
+                .OrderByDescending(b => b.BlockNumber)
+                .FirstOrDefaultAsync();
+
+            if (lastBlock == null)
+            {
+                return BigInteger.Zero;
+            }
+
+            return new BigInteger(lastBlock.BlockNumber);
+        }
+
+        #endregion
 
 
 

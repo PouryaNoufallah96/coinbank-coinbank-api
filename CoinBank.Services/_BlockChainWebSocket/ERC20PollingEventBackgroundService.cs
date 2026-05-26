@@ -34,6 +34,7 @@ namespace CoinBank.Services._BlockChainWebSocket
         private int _currentRpcIndex = 0;
 
         private BigInteger _swapLastProcessedBlock = 0;
+        private readonly string _swapContractAddress;
 
         private bool _isDisposed = false;
 
@@ -47,6 +48,7 @@ namespace CoinBank.Services._BlockChainWebSocket
             _blockChainSettings = blockChainSettings;
 
             _rpcUrls = new[] { _blockChainSettings.ERC20RpcUrl };
+            _swapContractAddress = _blockChainSettings.ERC20SwapContractAddress;
 
             InitializeClients();
         }
@@ -66,7 +68,7 @@ namespace CoinBank.Services._BlockChainWebSocket
                     var safeBlock = latestBlock - 10;
                     await PollSwapMissingLogsAsync(safeBlock, stoppingToken);
 
-                    await Task.Delay(TimeSpan.FromMinutes(5), stoppingToken);
+                    await Task.Delay(TimeSpan.FromSeconds(30), stoppingToken);
                 }
                 catch (OperationCanceledException)
                 {
@@ -108,7 +110,7 @@ namespace CoinBank.Services._BlockChainWebSocket
                 {
                     FromBlock = new BlockParameter(new HexBigInteger(fromBlock)),
                     ToBlock = new BlockParameter(new HexBigInteger(toBlock)),
-                    Address = new[] { _blockChainSettings.ERC20SwapContractAddress }
+                    Address = new[] { _swapContractAddress }
                 };
 
                 try

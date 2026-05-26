@@ -17,9 +17,9 @@ namespace CoinBank.Api.Controllers.V1
     public class PreSaleOrderController(IPreSaleOrderService _preSaleOrderService) : ApiBaseController
     {
 
-       
+
         [HttpPost("[action]")]
-        [Authorize(RequireActiveWithEVMWallet = true)]
+        [Authorize(RequireActiveWithBEP20Wallet = true)]
         [CustomRateLimit(maxAttemptsCount: 20)]
         [SwaggerOperation(Summary = "Create pre-sale order", Tags = ["PreSaleOrder"])]
         public async Task<PreSaleOrderResult> CreatePreSaleOrderAsync(CreatePreSaleOrderUpdate update)
@@ -31,9 +31,9 @@ namespace CoinBank.Api.Controllers.V1
             );
         }
 
-      
+
         [HttpPost("[action]")]
-        [Authorize(RequireActiveUser = false)]
+        [Authorize(RequireActiveUser = false, JustBSC = true)]
         [CustomRateLimit(maxAttemptsCount: 50)]
         [SwaggerOperation(Summary = "Get pre-sale order history", Tags = ["PreSaleOrder"])]
         public async Task<PreSaleOrderListResult> GetPreSaleOrderHistoryAsync(GetPreSaleOrderHistoryUpdate update)
@@ -45,9 +45,9 @@ namespace CoinBank.Api.Controllers.V1
             );
         }
 
-      
+
         [HttpPost("[action]")]
-        [Authorize(RequireActiveUser = false)]
+        [Authorize(RequireActiveUser = false, JustBSC = true)]
         [CustomRateLimit(maxAttemptsCount: 50)]
         [SwaggerOperation(Summary = "Get wallet stats", Tags = ["PreSaleOrder"])]
         public async Task<List<PreSaleOrderWalletStatsResult>> GetWalletStatsAsync(GetPreSaleOrderWalletStatsUpdate update)
@@ -59,9 +59,9 @@ namespace CoinBank.Api.Controllers.V1
             );
         }
 
-      
+
         [HttpPost("[action]")]
-        [Authorize(RequireActiveUser = false)]
+        [Authorize(RequireActiveUser = false, JustBSC = true)]
         [CustomRateLimit(maxAttemptsCount: 50)]
         [SwaggerOperation(Summary = "Get One pre-sale order detail", Tags = ["PreSaleOrder"])]
         public async Task<PreSaleOrderDetailResult> GetOnePreSaleOrderDetailAsync(GetOnePreSaleOrderDetailUpdate update)

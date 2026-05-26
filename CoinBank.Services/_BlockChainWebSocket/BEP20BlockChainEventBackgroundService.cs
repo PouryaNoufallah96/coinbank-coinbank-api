@@ -8,6 +8,7 @@ using CoinBank.Services._Transaction;
 using CoinBank.Services._Transaction.DTOs.Updates;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Nethereum.BlockchainProcessing.BlockStorage.Entities;
 using Nethereum.Contracts;
 using Nethereum.Hex.HexConvertors.Extensions;
 using Nethereum.Hex.HexTypes;
@@ -26,6 +27,7 @@ namespace CoinBank.Services._BlockChainWebSocket
     {
         private const string SwapLogPrefix = "[BEP20-WS-Swap]";
         private const string TransferLogPrefix = "[BEP20-WS-Transfer]";
+        private const string StakeLogPrefix = "[BEP20-STAKE-WS]";
         private const string PreSaleLogPrefix = "[BEP20-WS-PreSale]";
         private const string CommonLogPrefix = "[BEP20-WS]";
         private const string NetworkName = "BEP20";
@@ -50,6 +52,8 @@ namespace CoinBank.Services._BlockChainWebSocket
 
         private BigInteger _swapLastProcessedBlock = 0;
         private BigInteger _preSaleLastProcessedBlock = 0;
+        private BigInteger _stakeLastProcessedBlock = 0;
+
 
         private readonly SemaphoreSlim _reconnectLock = new(1, 1);
         private readonly SemaphoreSlim _cleanupLock = new(1, 1);
@@ -57,6 +61,8 @@ namespace CoinBank.Services._BlockChainWebSocket
         private IDisposable _preSaleContractEventsSubscription;
         private IDisposable _incomingTransferSubscription;
         private IDisposable _swapContractEventsSubscription;
+        private IDisposable _stakeContractEventsSubscription;
+
 
         private int _reconnectAttempts = 0;
         private DateTime _lastEventReceived = DateTime.UtcNow;
@@ -224,9 +230,11 @@ namespace CoinBank.Services._BlockChainWebSocket
                 _preSaleContractEventsSubscription?.Dispose();
                 _incomingTransferSubscription?.Dispose();
                 _swapContractEventsSubscription?.Dispose();
+                _stakeContractEventsSubscription?.Dispose();
                 _preSaleContractEventsSubscription = null;
                 _incomingTransferSubscription = null;
                 _swapContractEventsSubscription = null;
+                _stakeContractEventsSubscription = null;
 
                 if (_webSocketClient != null)
                 {
@@ -676,8 +684,363 @@ namespace CoinBank.Services._BlockChainWebSocket
 
 
 
+
+        #region Stake
+
+        private async Task SubscribeToStakeContractEventsAsync(CancellationToken cancellationToken)
+        {
+            var subscription = new EthLogsObservableSubscription(_webSocketClient);
+
+            var safeObservable = subscription
+                    .GetSubscriptionDataResponsesAsObservable()
+                    .Where(log => log.Address.IsTheSameAddress(_blockChainSettings.StakeContractAddress))
+                    .Select(log => Observable.FromAsync(() => ProcessStakeContractEventLogAsync(log, cancellationToken)))
+                    .Concat();
+
+            _stakeContractEventsSubscription = safeObservable.Subscribe(
+                _ => { },
+                ex =>
+                {
+                    _logger.LogError(
+                        ex,
+                        "{Prefix} Stake subscription error",
+                        StakeLogPrefix
+                    );
+                },
+                () =>
+                {
+                    _logger.LogWarning(
+                        "{Prefix} Stake subscription completed",
+                        StakeLogPrefix
+                    );
+                });
+
+            var filter = new NewFilterInput
+            {
+                Address = new[] { _blockChainSettings.StakeContractAddress },
+                FromBlock = new BlockParameter(await GetStakeLastProcessedBlock(cancellationToken))
+            };
+
+            await subscription.SubscribeAsync(filter);
+
+            _logger.LogInformation("{Prefix} Stake subscription active: {Address}", StakeLogPrefix, _blockChainSettings.StakeContractAddress);
+        }
+
+        private async Task ProcessStakeContractEventLogAsync(FilterLog log, CancellationToken cancellationToken)
+        {
+            try
+            {
+                var depositCreated = log.DecodeEvent<DepositCreatedEventDTO>();
+
+                if (depositCreated != null)
+                {
+                    await CreateDepositCreatedLogAsync(log, depositCreated, cancellationToken);
+
+                    return;
+                }
+
+                var earlyWithdrawn = log.DecodeEvent<EarlyWithdrawnEventDTO>();
+
+                if (earlyWithdrawn != null)
+                {
+                    await CreateEarlyWithdrawnLogAsync(log, earlyWithdrawn, cancellationToken);
+
+                    return;
+                }
+
+                var profitWithdrawn = log.DecodeEvent<ProfitWithdrawnEventDTO>();
+
+                if (profitWithdrawn != null)
+                {
+                    await CreateProfitWithdrawnLogAsync(log, profitWithdrawn, cancellationToken);
+
+                    return;
+                }
+
+                var withdrawn = log.DecodeEvent<WithdrawnEventDTO>();
+
+                if (withdrawn != null)
+                {
+                    await CreateWithdrawnLogAsync(log, withdrawn, cancellationToken);
+
+                    return;
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(
+                    ex,
+                    "{Prefix} Stake event decode failed",
+                    StakeLogPrefix
+                );
+            }
+        }
+
+        private async Task CreateDepositCreatedLogAsync(FilterLog log, EventLog<DepositCreatedEventDTO> eLog, CancellationToken cancellationToken)
+        {
+            try
+            {
+                var depositId = ByteArray32ToHex(eLog.Event.DepositId);
+
+                _logger.LogInformation(
+                  "{prefix} DepositCreated | DepositId: {DepositId}, Depositor: {Depositor}, Token: {Token}",
+                  StakeLogPrefix,
+                  depositId,
+                  eLog.Event.Depositor,
+                  eLog.Event.Token
+              );
+
+                SentrySdk.CaptureMessage(
+                   $"{StakeLogPrefix} DepositCreated | DepositId: {depositId}, Depositor: {eLog.Event.Depositor}"
+               );
+
+                await _transactionLogService.CreateDepositCreatedLogAsync(
+                    new DepositCreatedLog
+                    {
+                        Hash = log.TransactionHash,
+                        Address = log.Address,
+                        BlockNumber = log.BlockNumber!.Value,
+                        DepositId = depositId,
+                        Depositor = eLog.Event.Depositor,
+                        Token = eLog.Event.Token,
+                        LockDuration = eLog.Event.LockDuration,
+                        Principal = eLog.Event.Principal,
+                        Profit = eLog.Event.Profit,
+                        UnlocksAt = eLog.Event.UnlocksAt,
+                        EventType = Domain.Collections.BlockchainEventType.DepositCreated,
+                        Network = NetworkName
+                    });
+
+                _lastEventReceived = DateTime.UtcNow;
+
+                lock (_blockLock)
+                {
+                    _stakeLastProcessedBlock = BigInteger.Max(_stakeLastProcessedBlock, log.BlockNumber.Value + 1);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "{Prefix} DepositCreated failed", StakeLogPrefix
+                );
+
+                throw;
+            }
+        }
+
+        private async Task CreateEarlyWithdrawnLogAsync(FilterLog log, EventLog<EarlyWithdrawnEventDTO> eLog, CancellationToken cancellationToken)
+        {
+            try
+            {
+                var depositId = ByteArray32ToHex(eLog.Event.DepositId);
+                _logger.LogInformation(
+                  "{prefix} EarlyWithdrawn | DepositId: {DepositId}, Depositor: {Depositor}",
+                  StakeLogPrefix,
+                  depositId,
+                  eLog.Event.Depositor
+              );
+
+                SentrySdk.CaptureMessage(
+                    $"{StakeLogPrefix} EarlyWithdrawn | DepositId: {depositId}, Depositor: {eLog.Event.Depositor}"
+                );
+                await _transactionLogService.CreateEarlyWithdrawnLogAsync(
+                    new EarlyWithdrawnLog
+                    {
+                        Hash = log.TransactionHash,
+                        Address = log.Address,
+                        BlockNumber = log.BlockNumber!.Value,
+                        DepositId = depositId,
+                        Depositor = eLog.Event.Depositor,
+                        WithdrawAmount = eLog.Event.WithdrawAmount,
+                        ProfitAmount = eLog.Event.ProfitAmount,
+                        FinalPayoutAmount = eLog.Event.FinalPayoutAmount,
+                        ClaimedProfitAmount = eLog.Event.ClaimedProfitAmount,
+                        EventType = Domain.Collections.BlockchainEventType.EarlyWithdrawn,
+                        Network = NetworkName
+                    });
+
+                _lastEventReceived = DateTime.UtcNow;
+
+                //lock (_blockLock)
+                //{
+                //    _lastProcessedBlock = BigInteger.Max(
+                //        _lastProcessedBlock,
+                //        log.BlockNumber.Value + 1
+                //    );
+                //}
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "{Prefix} EarlyWithdrawn failed", StakeLogPrefix);
+
+                throw;
+            }
+        }
+
+        private async Task CreateProfitWithdrawnLogAsync(FilterLog log, EventLog<ProfitWithdrawnEventDTO> eLog, CancellationToken cancellationToken)
+        {
+            try
+            {
+                var depositId = ByteArray32ToHex(eLog.Event.DepositId);
+                _logger.LogInformation(
+                  "{prefix} ProfitWithdrawn | DepositId: {DepositId}, Depositor: {Depositor}, Profit: {Profit}",
+                  StakeLogPrefix,
+                  depositId,
+                  eLog.Event.Depositor,
+                  eLog.Event.Profit
+              );
+
+                SentrySdk.CaptureMessage(
+                    $"{StakeLogPrefix} ProfitWithdrawn | DepositId: {depositId}, Depositor: {eLog.Event.Depositor}, Profit: {eLog.Event.Profit}"
+                );
+
+                await _transactionLogService.CreateProfitWithdrawnLogAsync(
+                    new ProfitWithdrawnLog
+                    {
+                        Hash = log.TransactionHash,
+                        Address = log.Address,
+                        BlockNumber = log.BlockNumber!.Value,
+                        DepositId = depositId,
+                        Depositor = eLog.Event.Depositor,
+                        Token = eLog.Event.Token,
+                        Profit = eLog.Event.Profit,
+                        EventType = Domain.Collections.BlockchainEventType.ProfitWithdrawn,
+                        Network = NetworkName
+                    });
+
+                _lastEventReceived = DateTime.UtcNow;
+
+                //lock (_blockLock)
+                //{
+                //    _lastProcessedBlock = BigInteger.Max(
+                //        _lastProcessedBlock,
+                //        log.BlockNumber.Value + 1
+                //    );
+                //}
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(
+                    ex,
+                    "{Prefix} ProfitWithdrawn failed",
+                    StakeLogPrefix
+                );
+
+                throw;
+            }
+        }
+
+        private async Task CreateWithdrawnLogAsync(FilterLog log, EventLog<WithdrawnEventDTO> eLog, CancellationToken cancellationToken)
+        {
+            try
+            {
+                var depositId = ByteArray32ToHex(eLog.Event.DepositId);
+
+
+                _logger.LogInformation(
+                   "{prefix} Withdrawn | DepositId: {DepositId}, Depositor: {Depositor}",
+                   StakeLogPrefix,
+                   depositId,
+                   eLog.Event.Depositor
+               );
+
+                SentrySdk.CaptureMessage(
+                    $"{StakeLogPrefix} Withdrawn | DepositId: {depositId}, Depositor: {eLog.Event.Depositor}"
+                );
+
+
+                await _transactionLogService.CreateWithdrawnLogAsync(
+                    new WithdrawnLog
+                    {
+                        Hash = log.TransactionHash,
+                        Address = log.Address,
+                        BlockNumber = log.BlockNumber!.Value,
+                        DepositId = depositId,
+                        Depositor = eLog.Event.Depositor,
+                        Principal = eLog.Event.Principal,
+                        Profit = eLog.Event.Profit,
+                        TotalPayout = eLog.Event.TotalPayout,
+                        EventType = Domain.Collections.BlockchainEventType.WithdrawnAll,
+                        Network = NetworkName
+                    });
+
+                _lastEventReceived = DateTime.UtcNow;
+
+                //lock (_blockLock)
+                //{
+                //    _lastProcessedBlock = BigInteger.Max(
+                //        _lastProcessedBlock,
+                //        log.BlockNumber.Value + 1
+                //    );
+                //}
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(
+                    ex,
+                    "{Prefix} Withdrawn failed",
+                    StakeLogPrefix
+                );
+
+                throw;
+            }
+        }
+
+        private async Task<HexBigInteger> GetStakeLastProcessedBlock(CancellationToken cancellationToken)
+        {
+            try
+            {
+                lock (_blockLock)
+                {
+                    if (_stakeLastProcessedBlock > 0)
+                    {
+                        return _stakeLastProcessedBlock.ToHexBigInteger();
+                    }
+                }
+
+                var lastDbBlock = await _transactionLogService.GetDepositLastCheckedBlockNumberAsync(NetworkName);
+
+                lock (_blockLock)
+                {
+                    _stakeLastProcessedBlock = lastDbBlock;
+                }
+
+                if (_stakeLastProcessedBlock > 0)
+                {
+                    return _stakeLastProcessedBlock.ToHexBigInteger();
+                }
+
+                var latestBlock = await _web3.Eth.Blocks.GetBlockNumber.SendRequestAsync();
+
+                lock (_blockLock)
+                {
+                    _stakeLastProcessedBlock = latestBlock;
+
+                    return latestBlock;
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "{Prefix} GetStakeLastProcessedBlock failed", StakeLogPrefix);
+
+                SwitchRpc();
+                InitializeClients();
+
+                throw;
+            }
+        }
+
+        #endregion
+
+
+
+
+
+
+
+
+
         #region TrasferSide
-        
+
         private async Task SubscribeToIncomingTransfersAsync(CancellationToken cancellationToken)
         {
             var tokenAddresses = _availableTokensSettings
@@ -800,6 +1163,7 @@ namespace CoinBank.Services._BlockChainWebSocket
             {
                 _preSaleContractEventsSubscription?.Dispose();
                 _swapContractEventsSubscription?.Dispose();
+                _stakeContractEventsSubscription?.Dispose();
                 _incomingTransferSubscription?.Dispose();
                 _webSocketClient?.Dispose();
                 _reconnectLock?.Dispose();

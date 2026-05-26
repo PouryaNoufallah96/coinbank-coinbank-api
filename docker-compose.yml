@@ -36,28 +36,47 @@ services:
       - JwtServiceSettings__ClientInfo__app_mainappful=$jwtservicesettings_clientinfo_app_value
 
       # Blockchain
-      - BlockChainSettings__RpcUrl=$blockchainsettings_rpc_url
-      - BlockChainSettings__RpcUrl2=$blockchainsettings_rpc_url2
-      - BlockChainSettings__ContractAddress=$blockchainsettings_contract_address
       - BlockChainSettings__PrivateKey=$blockchainsettings_private_key
       - BlockChainSettings__PublicAddress=$blockchainsettings_public_address
-      - BlockChainSettings__ChainId=$blockchainsettings_chain_id
+      
+      - BlockChainSettings__BEP20RpcUrl=$blockchainsettings_bep20_rpc_url
+      - BlockChainSettings__BEP20WsUrl=$blockchainsettings_bep20_ws_url
+
+      - BlockChainSettings__BEP20RpcUrl2=$blockchainsettings_bep20_rpc_url2
+      - BlockChainSettings__BEP20WsUrl2=$blockchainsettings_bep20_ws_url2
+
+      - BlockChainSettings__ERC20RpcUrl=$blockchainsettings_erc20_rpc_url
+      - BlockChainSettings__ERC20WsUrl=$blockchainsettings_erc20_ws_url
+
+      - BlockChainSettings__TRC20RpcUrl=$blockchainsettings_trc20_rpc_url
+      - BlockChainSettings__TRC20WsUrl=$blockchainsettings_trc20_ws_url
+
+      - BlockChainSettings__BEP20ChainId=$blockchainsettings_bep20_chain_id
+      - BlockChainSettings__ERC20ChainId=$blockchainsettings_erc20_chain_id
+
       - BlockChainSettings__TransactionTimeoutSeconds=$blockchainsettings_transaction_timeout_seconds
+
+      - BlockChainSettings__PreSaleContractAddress=$blockchainsettings_presale_contract_address
+      - BlockChainSettings__StakeContractAddress=$blockchainsettings_stake_contract_address
+
+      - BlockChainSettings__ERC20SwapContractAddress=$blockchainsettings_erc20_swap_contract_address
+      - BlockChainSettings__TRC20SwapContractAddress=$blockchainsettings_trc20_swap_contract_address
+      - BlockChainSettings__BEP20SwapContractAddress=$blockchainsettings_bep20_swap_contract_address
+
       - BlockChainSettings__DefaultGasLimit=$blockchainsettings_default_gas_limit
       - BlockChainSettings__DefaultGasPriceGwei=$blockchainsettings_default_gas_price_gwei
       - BlockChainSettings__MinGasPriceGwei=$blockchainsettings_min_gas_price_gwei
       - BlockChainSettings__MaxGasPriceGwei=$blockchainsettings_max_gas_price_gwei
 
-      # Blockchain WebSocket
-      - BlockchainWebSocketSetting__WsUrl=$blockchainwebsocketsetting_ws_url
-      - BlockchainWebSocketSetting__WsUrl2=$blockchainwebsocketsetting_ws_url2
-      - BlockchainWebSocketSetting__ContractAddress=$blockchainwebsocketsetting_contract_address
-      - BlockchainWebSocketSetting__ReconnectInterval=$blockchainwebsocketsetting_reconnect_interval
-      - BlockchainWebSocketSetting__MaxReconnectAttempts=$blockchainwebsocketsetting_max_reconnect_attempts
-      - BlockchainWebSocketSetting__HeartbeatInterval=$blockchainwebsocketsetting_heartbeat_interval
-      - BlockchainWebSocketSetting__ConnectionTimeout=$blockchainwebsocketsetting_connection_timeout
-      - BlockchainWebSocketSetting__SubscriptionTimeout=$blockchainwebsocketsetting_subscription_timeout
-
+      - BlockChainSettings__ReconnectInterval=$blockchainsettings_reconnect_interval
+      - BlockChainSettings__MaxReconnectAttempts=$blockchainsettings_max_reconnect_attempts
+      - BlockChainSettings__HeartbeatInterval=$blockchainsettings_heartbeat_interval
+      - BlockChainSettings__ConnectionTimeout=$blockchainsettings_connection_timeout
+      - BlockChainSettings__SubscriptionTimeout=$blockchainsettings_subscription_timeout
+     
+      #price 
+      - PriceSetting__CMCApiKey=$pricesetting_cmcapikey
+   
       # Application Pool Settings -> Applications[0]
       - ApplicationPoolSettings__Applications__0__ApplicationId=$applicationpoolsettings_applications_0_application_id
       - ApplicationPoolSettings__Applications__0__PreSharedKey=$applicationpoolsettings_applications_0_pre_shared_key

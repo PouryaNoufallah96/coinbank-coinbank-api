@@ -25,6 +25,7 @@ namespace CoinBank.Services._BlockChain
         private const string PreSaleContractAbi = TokenForwardSaleAbi.PreSaleAbi;
         private const string ERC20Abi = TokenForwardSaleAbi.ERC20Abi;
         private const string SwapAbi = TokenForwardSaleAbi.SwapAbi;
+        private const string StakeAbi = TokenForwardSaleAbi.StakeAbi;
 
         private readonly BlockChainSettings _settings;
         private readonly ILogger<BlockChainService> _logger;
@@ -251,7 +252,7 @@ namespace CoinBank.Services._BlockChain
             }
         }
 
-     
+
         private object[] MapVestingData(List<PreSaleReleaseStep> releaseSchedule)
         {
             if (releaseSchedule == null || !releaseSchedule.Any())
@@ -361,7 +362,6 @@ namespace CoinBank.Services._BlockChain
 
 
         #endregion
-
 
 
         #region Swap Methods
@@ -693,7 +693,7 @@ namespace CoinBank.Services._BlockChain
 
 
 
-        #region Swap Balance Methods
+        #region Balance Methods
 
 
         public async Task<Dictionary<string, decimal>> GetBep20SwapContractBalancesAsync(List<string> symbols = null)
@@ -910,7 +910,7 @@ namespace CoinBank.Services._BlockChain
                 }
             };
 
-            var returnDataList = await _multicallService.ExecuteCallsAsync(calls);
+            var returnDataList = await _multicallService.ExecuteBscCallsAsync(calls);
 
             if (returnDataList == null || returnDataList.Count == 0 || returnDataList[0] == null)
                 return 0;
@@ -955,7 +955,7 @@ namespace CoinBank.Services._BlockChain
                 }
             };
 
-            var returnDataList = await _multicallService.ExecuteCallsAsync(calls);
+            var returnDataList = await _multicallService.ExecuteEthereumCallsAsync(calls);
 
             if (returnDataList == null || returnDataList.Count == 0 || returnDataList[0] == null)
                 return 0;
@@ -1049,20 +1049,65 @@ namespace CoinBank.Services._BlockChain
         #endregion
 
 
+        #region Stake 
 
-        public static string? GetNetworkFromContractType(ContractType contractType)
+        /// <summary>
+        /// Preview accrued profit for a deposit
+        /// </summary>
+        /// <param name="depositId">Deposit Id (bytes32 hex string)</param>
+        /// <param name="network">Network type (BEP20 / ERC20)</param>
+        /// <returns>Claimable profit amount</returns>
+        /// <exception cref="BadRequestException"></exception>
+        public async Task<BigInteger> StakeBEP20PreviewAccruedProfitAsync(string depositId)
         {
-            return contractType switch
-            {
-                ContractType.ERC20Swap => "ERC20",
-                ContractType.BEP20Swap => "BEP20",
-                ContractType.PreSale => "BEP20",
-                ContractType.Stake => "BEP20",
-                ContractType.TRC20Swap => "TRC20",
+            if (string.IsNullOrWhiteSpace(depositId))
+                throw new BadRequestException("Deposit ID is null or empty.");
 
-                _ => null
-            };
+            try
+            {
+                Web3 web3;
+                string contractAddress;
+
+
+                web3 = _bep20Web3;
+                contractAddress = _settings.StakeContractAddress;
+
+
+                var contract = web3.Eth.GetContract(StakeAbi, contractAddress);
+
+                var function = contract.GetFunction("previewAccruedProfit");
+
+                var depositIdBytes = HexToByteArray32(depositId);
+
+                var result = await function.CallAsync<BigInteger>(
+                    depositIdBytes
+                );
+
+                return result;
+            }
+            catch (SmartContractRevertException revertEx)
+            {
+                _logger.LogError(
+                    revertEx,
+                    "Contract revert error during previewAccruedProfit: {Message}",
+                    revertEx.Message);
+
+                throw new BaseException("Blockchain contract reverted.");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(
+                    ex,
+                    "Unexpected error during previewAccruedProfit.");
+
+                throw new BaseException("An error happened while previewing accrued profit.");
+            }
         }
+
+        #endregion
+
+
+       
 
         private AvailableTokenData ValidateToken(string tokenName, string network = null)
         {
