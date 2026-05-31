@@ -58,7 +58,7 @@ namespace CoinBank.Services._Stake
 
             var plan = _stakeSetting.Plans
                 .FirstOrDefault(p => p.DurationInMonths == update.Duration)
-                ?? throw new BadRequestException("Invalid staking duration. Allowed durations are based on configured plans 12 and 24 month");
+                ?? throw new BadRequestException("Invalid staking duration. Allowed durations are based on configured plans 1,3,6,12,18 and 24 month");
 
             var tokenBalance = 0m;
 

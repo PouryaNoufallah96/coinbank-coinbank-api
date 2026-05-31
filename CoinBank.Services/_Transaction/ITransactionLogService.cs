@@ -20,9 +20,10 @@ namespace CoinBank.Services._Transaction
         Task CreateSwapRefundedLogAsync(SwapRefundedLog input);
         Task<BigInteger> GetSwapLastCheckedBlockNumberAsync(string network);
 
+
         //Stake 
         Task CreateDepositCreatedLogAsync(DepositCreatedLog input);
-        Task CreateEarlyWithdrawnLogAsync(EarlyWithdrawnLog input);
+        //Task CreateEarlyWithdrawnLogAsync(EarlyWithdrawnLog input);
         Task CreateProfitWithdrawnLogAsync(ProfitWithdrawnLog input);
         Task CreateWithdrawnLogAsync(WithdrawnLog input);
         Task<BigInteger> GetDepositLastCheckedBlockNumberAsync(string network = "BEP20");

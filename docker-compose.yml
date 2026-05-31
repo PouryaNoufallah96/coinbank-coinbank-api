@@ -6,8 +6,8 @@ services:
     restart: unless-stopped
     ports:
       - "127.0.0.1:3013:80"
-    networks:
-      - coinbank-net
+    # networks:
+    #   - coinbank-net
     volumes:
       - "/etc/timezone:/etc/timezone:ro"
       - "/etc/localtime:/etc/localtime:ro"

@@ -7,7 +7,7 @@ namespace CoinBank.Services._Withdrawal
 
         Task SyncStakeWithdrawalsAsync(string stakeReference, bool syncProfit, bool syncAmount);
         Task CreateProfitWithdrawaByEventAsycn(string depositRef, BigInteger amount, string hash);
-        Task CreateEarlyWithdrawnByEventAsync(string depositRef, string hash, BigInteger withdrawAmount, BigInteger profitAmount, BigInteger costAmont);
+        //Task CreateEarlyWithdrawnByEventAsync(string depositRef, string hash, BigInteger withdrawAmount, BigInteger profitAmount, BigInteger costAmont);
         Task CreateWithdrawnAllByEventAsync(string depositRef, string hash, BigInteger withdrawAmount, BigInteger profitAmount);
 
         //Task<WithdrawalResult> WithdrawStakeProfitAsync(WithdrawStakeProfitUpdate update, string publicKey, string evmWalletAddress);

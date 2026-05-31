@@ -1066,55 +1066,6 @@
     },
     {
         ""type"": ""event"",
-        ""name"": ""EarlyWithdrawn"",
-        ""inputs"": [
-            {
-                ""name"": ""depositId"",
-                ""type"": ""bytes32"",
-                ""indexed"": false,
-                ""internalType"": ""bytes32""
-            },
-            {
-                ""name"": ""depositor"",
-                ""type"": ""address"",
-                ""indexed"": false,
-                ""internalType"": ""address""
-            },
-            {
-                ""name"": ""token"",
-                ""type"": ""address"",
-                ""indexed"": false,
-                ""internalType"": ""address""
-            },
-            {
-                ""name"": ""principalPaid"",
-                ""type"": ""uint256"",
-                ""indexed"": false,
-                ""internalType"": ""uint256""
-            },
-            {
-                ""name"": ""profitPaid"",
-                ""type"": ""uint256"",
-                ""indexed"": false,
-                ""internalType"": ""uint256""
-            },
-            {
-                ""name"": ""totalPayout"",
-                ""type"": ""uint256"",
-                ""indexed"": false,
-                ""internalType"": ""uint256""
-            },
-            {
-                ""name"": ""remainingPrincipal"",
-                ""type"": ""uint256"",
-                ""indexed"": false,
-                ""internalType"": ""uint256""
-            }
-        ],
-        ""anonymous"": false
-    },
-    {
-        ""type"": ""event"",
         ""name"": ""ProfitWithdrawn"",
         ""inputs"": [
             {
