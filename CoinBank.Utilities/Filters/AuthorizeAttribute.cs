@@ -46,7 +46,7 @@ namespace Utilities.Filters
                 var networkClaim = jwtSecurityToken.Claims
                     .FirstOrDefault(c => c.Type == Claims.NetworkType.ToDisplay());
 
-                if (networkClaim == null || networkClaim.ToString() != "BEP20")
+                if (networkClaim == null || networkClaim.Value.ToString() != "BEP20")
                     throw new AuthorizationException("BSC wallet is required");
             }
 
