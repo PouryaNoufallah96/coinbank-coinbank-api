@@ -713,7 +713,28 @@ namespace CoinBank.Services._Transaction
                     Amount = x.Amount.ToString(),
                     User = x.User
                 },
+                DepositCreatedLog x => new DepositCreatedData
+                {
+                    Depositor = x.Depositor.ToString(),
+                    UnlocksAt = x.UnlocksAt.ToString(),
+                    Profit = x.Profit.ToString(),
+                    Principal = x.Principal.ToString(),
+                    LockDuration = x.LockDuration.ToString()
+                },
 
+                ProfitWithdrawnLog x => new ProfitWithdrawnData
+                {
+                    Depositor = x.Depositor,
+                    Profit = x.Profit.ToString()
+                },
+
+                WithdrawnLog x => new WithdrawnData
+                {
+                    Depositor = x.Depositor,
+                    Principal = x.Principal.ToString(),
+                    Profit = x.Profit.ToString(),
+                    TotalPayout = x.TotalPayout.ToString()
+                },
 
                 _ => throw new NotSupportedException($"No serializer defined for type {typeof(T).Name}")
             };
