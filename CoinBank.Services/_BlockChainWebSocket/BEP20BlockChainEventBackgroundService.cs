@@ -200,10 +200,11 @@ namespace CoinBank.Services._BlockChainWebSocket
 
             try
             {
-                await _webSocketClient.StartAsync();
+                await _webSocketClient.StartAsync(); 
 
                 await SubscribeToPreSaleContractEventsAsync(cancellationToken);
                 await SubscribeToSwapContractEventsAsync(cancellationToken);
+                await SubscribeToStakeContractEventsAsync(cancellationToken);
                 await SubscribeToIncomingTransfersAsync(cancellationToken);
 
                 _logger.LogInformation("{Prefix} Subscriptions active", CommonLogPrefix);
