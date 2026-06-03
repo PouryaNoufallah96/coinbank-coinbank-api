@@ -509,7 +509,8 @@ namespace CoinBank.Services._BlockChain
 
         private byte[] BuildLzOptions()
         {
-            var hex = "0x00030100110100000000000000000000000000030d40";
+            //var hex = "0x00030100110100000000000000000000000000030d40";
+            var hex = "0x000301001101000000000000000000000000000249f0";
 
             return Nethereum.Hex.HexConvertors.Extensions.HexByteConvertorExtensions
                 .HexToByteArray(hex);
