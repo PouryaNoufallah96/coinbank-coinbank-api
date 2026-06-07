@@ -309,6 +309,7 @@ namespace CoinBank.Services._Transaction
                 };
 
                 await _transactionLogRepository.InsertOneAsync(newLog);
+
             }
             catch (Exception ex)
             {

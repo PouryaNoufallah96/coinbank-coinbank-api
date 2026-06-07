@@ -533,6 +533,9 @@ namespace CoinBank.Services._BlockChainWebSocket
         {
             var swapId = ByteArray32ToHex(ev.Event.SwapId);
 
+            _logger.LogInformation("{Prefix} SwapInit | SwapId: {SwapId} | TokenOut: {TokenOut} | AmountOut: {AmountOut} | Receiver: {Receiver}",
+               SwapLogPrefix, swapId, ev.Event.TokenOut, ev.Event.AmountOut, ev.Event.Receiver);
+
             await _transactionLogService.CreateSwapInitiatedLogAsync(new SwapInitiatedLog
             {
                 Hash = log.TransactionHash,
@@ -562,6 +565,8 @@ namespace CoinBank.Services._BlockChainWebSocket
         private async Task HandleSwapExecuted(FilterLog log, EventLog<SwapExecutedEventDTO> ev, string network)
         {
             var swapId = ByteArray32ToHex(ev.Event.SwapId);
+            _logger.LogInformation("{Prefix} SwapExecuted | SwapId: {SwapId} | TokenOut: {TokenOut} | AmountOut: {AmountOut} | Receiver: {Receiver}",
+                SwapLogPrefix, swapId, ev.Event.TokenOut, ev.Event.AmountOut, ev.Event.Receiver);
 
             await _transactionLogService.CreateSwapExecutedLogAsync(new SwapExecutedLog
             {
@@ -584,6 +589,8 @@ namespace CoinBank.Services._BlockChainWebSocket
         private async Task HandleSwapFailed(FilterLog log, EventLog<SwapFailedEventDTO> ev, string network)
         {
             var swapId = ByteArray32ToHex(ev.Event.SwapId);
+            _logger.LogInformation("{Prefix} SwapFailed | SwapId: {SwapId} | TokenOut: {TokenOut} | AmountOut: {AmountOut} | Receiver: {Receiver}",
+                SwapLogPrefix, swapId, ev.Event.TokenOut, ev.Event.AmountOut, ev.Event.Receiver);
 
             await _transactionLogService.CreateSwapFailedLogAsync(new SwapFailedLog
             {
@@ -605,6 +612,7 @@ namespace CoinBank.Services._BlockChainWebSocket
         private async Task HandleSwapCompleted(FilterLog log, EventLog<SwapCompletedEventDTO> ev, string network)
         {
             var swapId = ByteArray32ToHex(ev.Event.SwapId);
+            _logger.LogInformation("{Prefix} SwapCompleted | SwapId: {SwapId}", SwapLogPrefix, swapId);
 
             await _transactionLogService.CreateSwapCompletedLogAsync(new SwapCompletedLog
             {
@@ -620,6 +628,8 @@ namespace CoinBank.Services._BlockChainWebSocket
         private async Task HandleSwapRefunded(FilterLog log, EventLog<SwapRefundedEventDTO> ev, string network)
         {
             var swapId = ByteArray32ToHex(ev.Event.SwapId);
+            _logger.LogInformation("{Prefix} SwapRefunded | SwapId: {SwapId} | Token: {Token} | Amount: {Amount} | User: {User}",
+                SwapLogPrefix, swapId, ev.Event.Token, ev.Event.Amount, ev.Event.User);
 
             await _transactionLogService.CreateSwapRefundedLogAsync(new SwapRefundedLog
             {
