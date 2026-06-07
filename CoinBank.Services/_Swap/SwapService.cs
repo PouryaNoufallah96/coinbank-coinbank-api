@@ -175,15 +175,15 @@ namespace CoinBank.Services._Swap
             var Bep20UsdtAddress = "0x55d398326f99059fF775485246999027B3197955";
 
             var firstPath = paths.First();
-            if (usdtAddresses.Contains(firstPath))
+            if (usdtAddresses.Contains(sourceTokenAddress))
             {
-                firstPath = Bep20UsdtAddress;
+                sourceTokenAddress = Bep20UsdtAddress;
             }
 
             var lastPath = paths.Last();
-            if (usdtAddresses.Contains(lastPath))
+            if (usdtAddresses.Contains(destinationTokenAddress))
             {
-                lastPath = Bep20UsdtAddress;
+                destinationTokenAddress = Bep20UsdtAddress;
             }
 
             if (!string.Equals(sourceTokenAddress, firstPath, StringComparison.OrdinalIgnoreCase))
