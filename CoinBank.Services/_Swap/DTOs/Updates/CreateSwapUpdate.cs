@@ -11,5 +11,7 @@ namespace CoinBank.Services._Swap.DTOs.Updates
         [StringInputValidation(maxLength: 50)] public string DestinationToken { get; set; }
         [StringInputValidation(maxLength: 50)] public string DestinationNetwork { get; set; }
         [StringInputValidation] public string DestinationWallet { get; set; }
+
+        [CollectionInput] public List<string> Paths { get; set; }
     }
 }

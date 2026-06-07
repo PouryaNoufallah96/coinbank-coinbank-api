@@ -403,13 +403,15 @@ namespace CoinBank.Services._BlockChain
                     update.SourceAmoutInWei,
                     BigInteger.Zero,
                     update.DestinationWallet,
-                    BuildBscPath(update.SourceTokenAddress, update.DestinationTokenAddress)
+                    update.Paths.ToArray()
+                    //BuildBscPath(update.SourceTokenAddress, update.DestinationTokenAddress)
                 };
 
                 var options = BuildLzOptions();
 
                 var result = await function.CallAsync<BigInteger>(
                     param,
+                    options,
                     options
                 );
 
@@ -477,7 +479,9 @@ namespace CoinBank.Services._BlockChain
                     update.SrcEid,
                     update.DstEid,
                     update.SourceAmountInWei,
-                    BuildBscPath(update.SourceTokenAddress, update.DestinationTokenAddress)
+                    update.Paths.ToArray()
+
+                    //BuildBscPath(update.SourceTokenAddress, update.DestinationTokenAddress)
                 );
 
                 _logger.LogInformation(
@@ -608,7 +612,7 @@ namespace CoinBank.Services._BlockChain
 
             var dstToken = _availableTokenData.FirstOrDefault(t => string.Equals(t.Address, dstAddress, StringComparison.OrdinalIgnoreCase)) ??
                 throw new NotFoundException();
-
+                
             // if both already BEP20
             var srcIsBep = string.Equals(srcToken.Network, "BEP20", StringComparison.OrdinalIgnoreCase);
             var dstIsBep = string.Equals(dstToken.Network, "BEP20", StringComparison.OrdinalIgnoreCase);

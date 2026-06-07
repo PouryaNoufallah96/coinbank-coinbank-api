@@ -13,6 +13,8 @@ namespace CoinBank.Services._BlockChain.DTOs.Updates
         [StringInputValidation] public string DestinationNetwork { get; set; }
         [StringInputValidation] public string DestinationTokenAddress { get; set; } //symbol 
         [StringInputValidation] public string DestinationWallet { get; set; }
+
+        public List<string> Paths { get; set; } 
     }
 
 
@@ -25,6 +27,7 @@ namespace CoinBank.Services._BlockChain.DTOs.Updates
         [StringInputValidation] public string DestinationTokenAddress { get; set; }
         public uint DstEid { get; set; }
 
+        public List<string> Paths { get; set; }
 
     }
 

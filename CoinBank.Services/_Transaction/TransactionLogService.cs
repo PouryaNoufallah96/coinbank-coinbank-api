@@ -418,7 +418,7 @@ namespace CoinBank.Services._Transaction
             var lastBlock = await _transactionLogRepository
                 .AsQueryable()
                 .Where(h =>
-                    h.EventType == BlockchainEventType.SwapInitiated && h.Network == network)
+                    h.EventType == BlockchainEventType.SwapExecuted && h.Network == network)
                 //||
                 //    h.EventType == BlockchainEventType.SwapExecuted ||
                 //    h.EventType == BlockchainEventType.SwapFailed)

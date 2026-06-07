@@ -29,8 +29,9 @@ namespace CoinBank.Services._Swap
 
         public async Task<SwapCreatedResult> CreateSwapAsync(CreateSwapUpdate update, string walletAddress, string walletType, string publicKey)
         {
-            var sourceNetwork = update.SourceNetwork.ToUpper(); 
+            var sourceNetwork = update.SourceNetwork.ToUpper();
             if (sourceNetwork != walletType) throw new BadRequestException($"please sign with {update.SourceNetwork} Wallet!");
+
 
             //var walletAddress = SpesifyWalletAddress(EVMwalletAddress, TronWalletAddress, update.SourceNetwork.ToUpper());
 
@@ -38,6 +39,8 @@ namespace CoinBank.Services._Swap
             var sourceTokenData = GetAndValidateSwappableToken(update.SourceNetwork, update.SourceSymbol);
             var destinationTokenData = GetAndValidateSwappableToken(update.DestinationNetwork, update.DestinationToken);
             await ValidateBalancesForSwapAsync(update, walletAddress);
+
+
 
             #region Source
             var swapReference = IdGenerartor.GenerateBytes32HexId();
@@ -60,6 +63,10 @@ namespace CoinBank.Services._Swap
             var destinationTokenPrice = await _priceService.GetOneTokenPriceForInternalUsageAsync(destinationSymbol);
             #endregion
 
+            var swapPaths = update.Paths;
+            SwapPathValidation(swapPaths, sourceTokenAddress, destinationTokenAddress);
+
+
             var (fee, feeToken) = await _blockChainService.SwapGetEstimatedFeeAsync(new _BlockChain.DTOs.Updates.GetSwapEstimatedFeeUpdate
             {
                 SwapReference = swapReference,
@@ -70,6 +77,7 @@ namespace CoinBank.Services._Swap
                 DestinationNetwork = destinationNetwork,
                 DestinationTokenAddress = destinationTokenAddress,
                 DestinationWallet = destinationWallet,
+                Paths = swapPaths,
             });
 
             var destinationTokenOutAmountInWei = await _blockChainService.SwapGetOutputAmountAsync(new _BlockChain.DTOs.Updates.SwapGetOutputAmount
@@ -78,12 +86,13 @@ namespace CoinBank.Services._Swap
                 SourceTokenAddress = sourceTokenAddress,
                 SourceAmountInWei = sourceAmountInWei,
                 SrcEid = srcEid,
-                DstEid = dstEid
+                DstEid = dstEid,
+                Paths = swapPaths
             });
 
             var destinationContractBalance = await _blockChainService.GetLiquidityBalanceAsync(destinationSymbol, destinationNetwork);
 
-            if(destinationContractBalance < destinationTokenOutAmountInWei)
+            if (destinationContractBalance < destinationTokenOutAmountInWei)
             {
                 throw new BadRequestException($"Insufficient liquidity for {destinationSymbol}.");
             }
@@ -156,6 +165,29 @@ namespace CoinBank.Services._Swap
             };
         }
 
+
+        private void SwapPathValidation(List<string> paths, string sourceTokenAddress, string destinationTokenAddress)
+        {
+            if (paths == null || paths.Count < 2)
+                throw new BadRequestException("Invalid Paths!");
+
+            var firstPath = paths.First();
+            var lastPath = paths.Last();
+
+            if (!string.Equals(sourceTokenAddress, firstPath, StringComparison.OrdinalIgnoreCase))
+                throw new BadRequestException("Invalid Path Start!");
+
+            if (!string.Equals(destinationTokenAddress, lastPath, StringComparison.OrdinalIgnoreCase))
+                throw new BadRequestException("Invalid Path End!");
+
+            var distinctCount = paths
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Count();
+
+            if (distinctCount != paths.Count)
+                throw new BadRequestException("Duplicate Path found in path!");
+        }
+
         //private string SpesifyWalletAddress(string EVMwalletAddress, string TromWalletAddress, string network)
         //{
         //    if (network == "BEP20")
@@ -199,7 +231,7 @@ namespace CoinBank.Services._Swap
             if (publicKey == "guess")
             {
                 query = query.Where(x =>
-                    (x.WalletAddress == walletAddress) 
+                    (x.WalletAddress == walletAddress)
                     && x.State != SwapState.NotRegistered);
             }
             else
@@ -324,7 +356,7 @@ namespace CoinBank.Services._Swap
 
             var swap = await _swapRepository.FindOneAndUpdateWithOptionAsync(filter, updateDef, options);
 
-          
+
             if (swap == null)
             {
                 //var existingSwap = await _swapRepository.AsQueryable()
@@ -376,7 +408,7 @@ namespace CoinBank.Services._Swap
 
             if (swap.Transactions == null || !swap.Transactions.Any())
                 return;
-      
+
             var hasFailed = swap.Transactions.Any(t => t.Type == SwapTransactionType.Failed);
             var hasExecute = swap.Transactions.Any(t => t.Type == SwapTransactionType.Execute);
             var hasInit = swap.Transactions.Any(t => t.Type == SwapTransactionType.Init);
@@ -392,13 +424,13 @@ namespace CoinBank.Services._Swap
             else
                 newState = swap.State; // fallback
 
-           
+
             var maxExecuteAmount = swap.Transactions
                 .Where(t => t.Type == SwapTransactionType.Execute)
                 .Select(t => t.Amount)
                 .DefaultIfEmpty(0)
                 .Max();
-          
+
             var updates = new List<UpdateDefinition<Swap>>();
 
             if (swap.State != newState)
@@ -417,7 +449,7 @@ namespace CoinBank.Services._Swap
                 updateDef
             );
         }
-       
+
         private string BuildSwapMessage(Swap swap, SwapTransactionType type)
         {
             return type switch
@@ -557,7 +589,7 @@ namespace CoinBank.Services._Swap
         //    var updateBuilder = Builders<Swap>.Update
         //        .Push(x => x.Transactions, transaction);
 
-          
+
         //    var newState = update.Type switch
         //    {
         //        SwapTransactionType.Init => SwapState.Pending,
