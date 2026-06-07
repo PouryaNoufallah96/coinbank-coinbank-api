@@ -46,7 +46,7 @@ namespace CoinBank.Api.Controllers.V1
 
 
         [HttpPost("[action]")]
-        //[Authorize(RequireActiveUser = true)]
+        [Authorize(RequireActiveUser = true)]
         [CustomRateLimit(maxAttemptsCount: 20)]
         [SwaggerOperation(Summary = "Create swap", Tags = ["Swap"])]
         public async Task<SwapCreatedResult> CreateSwapAsync(CreateSwapUpdate update)
