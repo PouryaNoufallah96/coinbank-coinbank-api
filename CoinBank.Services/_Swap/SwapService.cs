@@ -41,7 +41,7 @@ namespace CoinBank.Services._Swap
 
             #region Source
             var swapReference = IdGenerartor.GenerateBytes32HexId();
-            var estEid = _blockChainService.MapNetworkToEid(update.SourceNetwork);
+            var srcEid = _blockChainService.MapNetworkToEid(update.SourceNetwork);
             var sourceSymbol = update.SourceSymbol.ToUpper();
             var sourceTokenAddress = sourceTokenData.Address;
             var sourceTokenPrice = await _priceService.GetOneTokenPriceForInternalUsageAsync(sourceSymbol);
@@ -55,13 +55,15 @@ namespace CoinBank.Services._Swap
             var destinationSymbol = update.DestinationToken.ToUpper();
             var destinationTokenAddress = destinationTokenData.Address;
             var destinationWallet = update.DestinationWallet;
+            var dstEid = _blockChainService.MapNetworkToEid(update.DestinationNetwork);
+
             var destinationTokenPrice = await _priceService.GetOneTokenPriceForInternalUsageAsync(destinationSymbol);
             #endregion
 
             var (fee, feeToken) = await _blockChainService.SwapGetEstimatedFeeAsync(new _BlockChain.DTOs.Updates.GetSwapEstimatedFeeUpdate
             {
                 SwapReference = swapReference,
-                DstEid = estEid,
+                DstEid = dstEid,
                 SourceNetwork = sourceNetwork,
                 SourceTokenAddress = sourceTokenAddress,
                 SourceAmoutInWei = sourceAmountInWei,
@@ -74,7 +76,9 @@ namespace CoinBank.Services._Swap
             {
                 DestinationTokenAddress = destinationTokenAddress,
                 SourceTokenAddress = sourceTokenAddress,
-                SourceAmountInWei = sourceAmountInWei
+                SourceAmountInWei = sourceAmountInWei,
+                SrcEid = srcEid,
+                DstEid = dstEid
             });
 
             var destinationContractBalance = await _blockChainService.GetLiquidityBalanceAsync(destinationSymbol, destinationNetwork);
@@ -131,7 +135,8 @@ namespace CoinBank.Services._Swap
                 SourceAmountInWei = swap.SourceAmountInWei,
                 SourceWallet = swap.SourceWallet,
 
-                DstEid = estEid,
+                DstEid = dstEid,
+                SrcEid = srcEid,
 
                 DestinationNetwork = swap.DestinationNetwork,
                 DestinationSymbol = swap.DestinationSymbol,

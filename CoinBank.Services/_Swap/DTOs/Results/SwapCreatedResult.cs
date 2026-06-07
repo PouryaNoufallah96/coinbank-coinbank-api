@@ -17,6 +17,7 @@ namespace CoinBank.Services._Swap.DTOs.Results
         public string SourceAmountInWei { get; set; }
         public string SourceWallet { get; set; }
         public uint DstEid { get; set; }  
+        public uint SrcEid { get; set; }   
 
 
         public string DestinationNetwork { get; set; }

@@ -19,8 +19,13 @@ namespace CoinBank.Services._BlockChain.DTOs.Updates
     public class SwapGetOutputAmount
     {
         [StringInputValidation] public string SourceTokenAddress { get; set; }
+        public uint SrcEid { get; set; } 
+
         public BigInteger SourceAmountInWei { get; set; }
         [StringInputValidation] public string DestinationTokenAddress { get; set; }
+        public uint DstEid { get; set; }
+
+
     }
 
 }

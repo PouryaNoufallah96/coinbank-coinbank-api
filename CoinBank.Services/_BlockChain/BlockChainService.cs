@@ -474,9 +474,9 @@ namespace CoinBank.Services._BlockChain
                 var function = contract.GetFunction("getOutputAmount");
 
                 var result = await function.CallAsync<BigInteger>(
-                    update.SourceTokenAddress,
+                    update.SrcEid,
+                    update.DstEid,
                     update.SourceAmountInWei,
-                    update.DestinationTokenAddress,
                     BuildBscPath(update.SourceTokenAddress, update.DestinationTokenAddress)
                 );
 
