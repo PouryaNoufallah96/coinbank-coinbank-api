@@ -397,8 +397,6 @@ namespace CoinBank.Services._Swap
                 swap.RegisterHash = update.Hash;
                 swap.RegisterMoment = DateTime.UtcNow;
             }
-
-
             await SyncSwapStateAsync(swap);
 
             var message = BuildSwapMessage(swap, update.Type);
