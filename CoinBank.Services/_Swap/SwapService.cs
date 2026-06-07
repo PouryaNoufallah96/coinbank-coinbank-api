@@ -379,6 +379,26 @@ namespace CoinBank.Services._Swap
                 return;
             }
 
+            if (swap.RegisterHash == null)
+            {
+                var registerUpdateFilter = Builders<Swap>.Filter.And(
+                    Builders<Swap>.Filter.Eq(x => x.Id, swap.Id),
+                    Builders<Swap>.Filter.Eq(x => x.RegisterHash, null)
+                );
+
+                var registerUpdate = Builders<Swap>.Update
+                    .Set(x => x.RegisterHash, update.Hash)
+                    .Set(x => x.RegisterMoment, DateTime.UtcNow);
+
+                await _swapRepository.FindOneAndUpdateAsync(
+                    registerUpdateFilter,
+                    registerUpdate);
+
+                swap.RegisterHash = update.Hash;
+                swap.RegisterMoment = DateTime.UtcNow;
+            }
+
+
             await SyncSwapStateAsync(swap);
 
             var message = BuildSwapMessage(swap, update.Type);
@@ -433,8 +453,14 @@ namespace CoinBank.Services._Swap
 
             var updates = new List<UpdateDefinition<Swap>>();
 
+            //if(newState == SwapState.Pending || newState == SwapState.Completed )
+            //{ }
+
             if (swap.State != newState)
+            {
                 updates.Add(Builders<Swap>.Update.Set(x => x.State, newState));
+            }
+                
 
             if (maxExecuteAmount > 0 && swap.DestinationAmount != maxExecuteAmount)
                 updates.Add(Builders<Swap>.Update.Set(x => x.DestinationAmount, maxExecuteAmount));
