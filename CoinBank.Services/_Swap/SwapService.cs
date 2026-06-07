@@ -171,8 +171,20 @@ namespace CoinBank.Services._Swap
             if (paths == null || paths.Count < 2)
                 throw new BadRequestException("Invalid Paths!");
 
+            List<string> usdtAddresses = ["0xdAC17F958D2ee523a2206206994597C13D831ec7", "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t"];
+            var Bep20UsdtAddress = "0x55d398326f99059fF775485246999027B3197955";
+
             var firstPath = paths.First();
+            if (usdtAddresses.Contains(firstPath))
+            {
+                firstPath = Bep20UsdtAddress;
+            }
+
             var lastPath = paths.Last();
+            if (usdtAddresses.Contains(lastPath))
+            {
+                lastPath = Bep20UsdtAddress;
+            }
 
             if (!string.Equals(sourceTokenAddress, firstPath, StringComparison.OrdinalIgnoreCase))
                 throw new BadRequestException("Invalid Path Start!");
@@ -458,7 +470,7 @@ namespace CoinBank.Services._Swap
             {
                 updates.Add(Builders<Swap>.Update.Set(x => x.State, newState));
             }
-                
+
 
             if (maxExecuteAmount > 0 && swap.DestinationAmount != maxExecuteAmount)
                 updates.Add(Builders<Swap>.Update.Set(x => x.DestinationAmount, maxExecuteAmount));
