@@ -29,9 +29,6 @@ namespace CoinBank.Services._Transaction
         Task<BigInteger> GetDepositLastCheckedBlockNumberAsync(string network = "BEP20");
 
 
-
-
-
         Task<BigInteger> GetLastCheckedBlockNumberAsync();
     }
 }
