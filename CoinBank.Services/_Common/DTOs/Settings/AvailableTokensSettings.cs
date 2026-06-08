@@ -25,6 +25,7 @@
         public decimal MinSwapAmount { get; set; } 
         public decimal MaxSwapAmount { get; set; }  
         public bool SyncPrice { get; set; } = true;
+        public long CMCID { get; set; } 
         //public string LogoUrl { get; set; }
     }
 }

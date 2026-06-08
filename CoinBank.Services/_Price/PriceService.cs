@@ -100,7 +100,7 @@ namespace CoinBank.Services._Price
 
 
         #region GeckoTerminal
-       
+
         /// <summary>
         /// this method use for fetch price data with token name
         /// </summary>
@@ -327,15 +327,97 @@ namespace CoinBank.Services._Price
             {
                 var tokens = _availableTokenDatas
                     .Where(t => t.SyncPrice)
+                    .Where(t => t.CMCID > 0)
+                    .ToList();
+
+                var baseTokens = new List<AvailableTokenData>
+                {
+                    new() { Name = "BNB", Network = "BSC", PriceDecimalPlaces = 4, CMCID = 1839 },
+                    new() { Name = "ETH", Network = "ERC20", PriceDecimalPlaces = 4, CMCID = 1027 },
+                    new() { Name = "TRX", Network = "TRC20", PriceDecimalPlaces = 4, CMCID = 1958 },
+                    new() { Name = "USDT", Network = "MULTI", PriceDecimalPlaces = 4, CMCID = 825 }
+                };
+
+                var allTokens = tokens
+                    .Concat(baseTokens)
+                    .GroupBy(t => new { t.CMCID, t.Network })
+                    .Select(g => g.First())
+                    .ToList();
+
+                if (!allTokens.Any())
+                    return new List<PriceResult>();
+
+                var ids = allTokens
+                    .Select(t => t.CMCID)
+                    .Distinct()
+                    .ToList();
+
+                string idQuery = string.Join(",", ids);
+
+                string url =
+                    $"https://pro-api.coinmarketcap.com/v2/cryptocurrency/quotes/latest?id={idQuery}&convert=USD";
+
+                var request = new HttpRequestMessage(HttpMethod.Get, url);
+                request.Headers.Add("X-CMC_PRO_API_KEY", _priceSetting.CMCApiKey);
+
+                var response = await _httpClient.SendAsync(request);
+                response.EnsureSuccessStatusCode();
+
+                var jsonString = await response.Content.ReadAsStringAsync();
+
+                using JsonDocument doc = JsonDocument.Parse(jsonString);
+
+                var data = doc.RootElement.GetProperty("data");
+
+                var results = new List<PriceResult>();
+
+                foreach (var token in allTokens)
+                {
+                    var id = token.CMCID.ToString();
+
+                    if (!data.TryGetProperty(id, out var tokenData))
+                        continue;
+
+                    var quote = tokenData
+                        .GetProperty("quote")
+                        .GetProperty("USD");
+
+                    decimal price = quote.GetProperty("price").GetDecimal();
+                    decimal change24h = quote.GetProperty("percent_change_24h").GetDecimal();
+
+                    results.Add(new PriceResult
+                    {
+                        TokenName = token.Name,
+                        TokenNetwork = token.Network,
+                        Price = Math.Round(price, token.PriceDecimalPlaces),
+                        ChangePrice24hPercentage = change24h
+                    });
+                }
+
+                return results;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error syncing all prices");
+                return new List<PriceResult>();
+            }
+        }
+
+        public async Task<List<PriceResult>> SyncAllPricesFromCoinMarketCapWithSybmolsAsync()
+        {
+            try
+            {
+                var tokens = _availableTokenDatas
+                    .Where(t => t.SyncPrice)
                     .Where(t => !string.IsNullOrWhiteSpace(t.Name))
                     .ToList();
 
                 var baseTokens = new List<AvailableTokenData>
                 {
-                    new AvailableTokenData { Name = "BNB", Network = "BSC", PriceDecimalPlaces = 4 },
-                    new AvailableTokenData { Name = "ETH", Network = "ERC20", PriceDecimalPlaces = 4 },
-                    new AvailableTokenData { Name = "TRX", Network = "TRC20", PriceDecimalPlaces = 4 },
-                    new AvailableTokenData { Name = "USDT", Network = "MULTI", PriceDecimalPlaces = 4 }
+                    new AvailableTokenData { Name = "BNB", Network = "BSC", PriceDecimalPlaces = 4 ,CMCID = 1839 },
+                    new AvailableTokenData { Name = "ETH", Network = "ERC20", PriceDecimalPlaces = 4 ,CMCID = 1027 },
+                    new AvailableTokenData { Name = "TRX", Network = "TRC20", PriceDecimalPlaces = 4 , CMCID = 1958 },
+                    new AvailableTokenData { Name = "USDT", Network = "MULTI", PriceDecimalPlaces = 4 , CMCID = 825 }
                 };
 
                 var allTokens = tokens
@@ -356,7 +438,7 @@ namespace CoinBank.Services._Price
                 string url = $"https://pro-api.coinmarketcap.com/v1/cryptocurrency/quotes/latest?symbol={symbolQuery}&convert=USD";
 
                 var request = new HttpRequestMessage(HttpMethod.Get, url);
-                request.Headers.Add("X-CMC_PRO_API_KEY",  _priceSetting.CMCApiKey);
+                request.Headers.Add("X-CMC_PRO_API_KEY", _priceSetting.CMCApiKey);
 
                 var response = await _httpClient.SendAsync(request);
                 response.EnsureSuccessStatusCode();
