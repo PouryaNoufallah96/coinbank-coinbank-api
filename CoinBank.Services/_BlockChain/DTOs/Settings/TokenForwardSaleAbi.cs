@@ -454,6 +454,35 @@
                 ""name"": ""returnOptions"",
                 ""type"": ""bytes"",
                 ""internalType"": ""bytes""
+            },
+            {
+                ""name"": ""returnNativeDrop"",
+                ""type"": ""uint128"",
+                ""internalType"": ""uint128""
+            }
+        ],
+        ""outputs"": [
+            {
+                ""name"": """",
+                ""type"": ""uint256"",
+                ""internalType"": ""uint256""
+            }
+        ],
+        ""stateMutability"": ""view""
+    },
+    {
+        ""type"": ""function"",
+        ""name"": ""estimateReturnFee"",
+        ""inputs"": [
+            {
+                ""name"": ""srcEid"",
+                ""type"": ""uint32"",
+                ""internalType"": ""uint32""
+            },
+            {
+                ""name"": ""returnOptions"",
+                ""type"": ""bytes"",
+                ""internalType"": ""bytes""
             }
         ],
         ""outputs"": [
@@ -578,6 +607,11 @@
                 ""name"": ""returnOptions"",
                 ""type"": ""bytes"",
                 ""internalType"": ""bytes""
+            },
+            {
+                ""name"": ""returnNativeDrop"",
+                ""type"": ""uint128"",
+                ""internalType"": ""uint128""
             }
         ],
         ""outputs"": [],
@@ -744,6 +778,7 @@
         ],
         ""anonymous"": false
     }
+    
 ]";
 
         public const string ERC20Abi = @"[

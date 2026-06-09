@@ -27,6 +27,7 @@ namespace CoinBank.Domain.Collections
 
         public string FeeToken { get; set; }
         public decimal Fee { get; set; }
+        public string EstimatedReturnFee { get; set; } = null;
         public string RegisterHash { get; set; }
         public DateTime? RegisterMoment { get; set; } = null;
 

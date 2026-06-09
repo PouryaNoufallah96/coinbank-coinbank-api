@@ -30,6 +30,7 @@ namespace CoinBank.Services._Swap.DTOs.Results
 
         public string FeeToken { get; set; }
         public decimal Fee { get; set; }
+        public string EstimatedReturnFee { get; set; } 
         public SwapState State { get; set; }
         public List<SwapTransaction> Transactions { get; set; } = [];
     }

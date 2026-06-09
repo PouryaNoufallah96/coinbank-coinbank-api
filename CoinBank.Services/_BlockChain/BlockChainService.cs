@@ -384,6 +384,8 @@ namespace CoinBank.Services._BlockChain
                 return ConvertFeeFromWeiByNetwork(0, update.SourceNetwork);
             }
 
+            //var estimateReturnFee = await EstimateReturnFeeAsync(update.SourceNetwork, update.DestinationNetwork);
+
             try
             {
                 var web3 = GetWeb3(update.SourceNetwork);
@@ -412,8 +414,9 @@ namespace CoinBank.Services._BlockChain
                 var result = await function.CallAsync<BigInteger>(
                     param,
                     options,
-                    options
-                );
+                    options,
+                    update.EstimatedReturnFee
+                ); 
 
                 _logger.LogInformation(
                     "EstimateFee | SrcNet: {Src} | DstNet: {Dst} | Amount: {Amount} | Fee: {Fee}",
@@ -511,6 +514,55 @@ namespace CoinBank.Services._BlockChain
             }
         }
 
+        public async Task<BigInteger> EstimateReturnFeeAsync(string sourceNetwork , string destinationNetwork)
+        {
+
+            if (sourceNetwork == destinationNetwork)
+                return BigInteger.Zero;
+            
+            try
+            {
+                var web3 = GetWeb3(destinationNetwork);
+                var contractAddress = GetSwapContractAddress(destinationNetwork);
+
+                var contract = web3.Eth.GetContract(
+                    SwapAbi,
+                    contractAddress);
+
+                var function = contract.GetFunction("estimateReturnFee");
+
+                var srcEid = MapNetworkToEid(sourceNetwork);
+
+                var returnOptions = BuildLzOptions();
+
+                var result = await function.CallAsync<BigInteger>(
+                    srcEid,
+                    returnOptions);
+
+                _logger.LogInformation(
+                    "EstimateReturnFee | SourceNetwork: {SourceNetwork} | DestinationNetwork: {DestinationNetwork} | Fee: {Fee}",
+                    sourceNetwork,
+                    destinationNetwork,
+                    result);
+
+                return result = result + (result * 10 / 100);
+            }
+            catch (SmartContractRevertException revertEx)
+            {
+                _logger.LogError(
+                    revertEx,
+                    "Contract revert in estimateReturnFee: {Message}",
+                    revertEx.Message);
+
+                throw;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error in EstimateReturnFeeAsync");
+                throw;
+            }
+        }
+
         private byte[] BuildLzOptions()
         {
             //var hex = "0x00030100110100000000000000000000000000030d40";
@@ -520,7 +572,6 @@ namespace CoinBank.Services._BlockChain
                 .HexToByteArray(hex);
         }
        
-
         public async Task<BigInteger> GetLiquidityBalanceAsync(string tokenName, string network)
         {
             if (string.IsNullOrWhiteSpace(tokenName))
@@ -559,7 +610,6 @@ namespace CoinBank.Services._BlockChain
                 throw;
             }
         }
-
 
         public uint MapNetworkToEid(string network)
         {

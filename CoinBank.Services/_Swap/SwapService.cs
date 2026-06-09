@@ -67,6 +67,9 @@ namespace CoinBank.Services._Swap
             SwapPathValidation(swapPaths, sourceTokenAddress, destinationTokenAddress);
 
 
+            var estimatedReturnFee = await _blockChainService.EstimateReturnFeeAsync(sourceNetwork, destinationNetwork);
+
+
             var (fee, feeToken) = await _blockChainService.SwapGetEstimatedFeeAsync(new _BlockChain.DTOs.Updates.GetSwapEstimatedFeeUpdate
             {
                 SwapReference = swapReference,
@@ -78,6 +81,7 @@ namespace CoinBank.Services._Swap
                 DestinationTokenAddress = destinationTokenAddress,
                 DestinationWallet = destinationWallet,
                 Paths = swapPaths,
+                EstimatedReturnFee = estimatedReturnFee,
             });
 
             var destinationTokenOutAmountInWei = await _blockChainService.SwapGetOutputAmountAsync(new _BlockChain.DTOs.Updates.SwapGetOutputAmount
@@ -121,6 +125,7 @@ namespace CoinBank.Services._Swap
 
                 Fee = fee,
                 FeeToken = feeToken,
+                EstimatedReturnFee = estimatedReturnFee.ToString(),
                 State = SwapState.NotRegistered,
 
                 RegisterHash = null,
@@ -157,14 +162,13 @@ namespace CoinBank.Services._Swap
 
                 FeeToken = swap.FeeToken,
                 Fee = swap.Fee,
-
+                EstimatedReturnFee = swap.EstimatedReturnFee,
                 State = swap.State,
                 Transactions = swap.Transactions ?? new List<SwapTransaction>(),
                 CreatedMoment = swap.CreatedMoment,
                 ModifiedMoment = swap.ModifiedMoment,
             };
         }
-
 
         private void SwapPathValidation(List<string> paths, string sourceTokenAddress, string destinationTokenAddress)
         {

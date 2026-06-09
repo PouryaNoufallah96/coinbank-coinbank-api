@@ -14,6 +14,7 @@ namespace CoinBank.Services._BlockChain.DTOs.Updates
         [StringInputValidation] public string DestinationTokenAddress { get; set; } //symbol 
         [StringInputValidation] public string DestinationWallet { get; set; }
 
+        public BigInteger EstimatedReturnFee { get; set; } 
         public List<string> Paths { get; set; } 
     }
 
