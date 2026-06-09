@@ -12,5 +12,6 @@ namespace CoinBank.Services._Price
         Task<PriceResult> FetchTokenPriceFromCoinMarketCapAsync(string symbol);
         Task<List<PriceResult>> FetchTokensPriceFromCoinMarketCapAsync(List<string> symbols);
         Task<List<PriceResult>> SyncAllPricesFromCoinMarketCapAsync();
+        Task SyncCoinHistoryTokenFromCoinMarketCapAsync();
     }
 }
