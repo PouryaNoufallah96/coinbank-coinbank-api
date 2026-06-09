@@ -409,12 +409,13 @@ namespace CoinBank.Services._BlockChain
                     //BuildBscPath(update.SourceTokenAddress, update.DestinationTokenAddress)
                 };
 
-                var options = BuildLzOptions();
+                var sendOption = BuildLzOptions();
+                var retutnOption = BuildLzOptions(false);
 
                 var result = await function.CallAsync<BigInteger>(
                     param,
-                    options,
-                    options,
+                    sendOption,
+                    retutnOption,
                     update.EstimatedReturnFee
                 ); 
 
@@ -533,7 +534,7 @@ namespace CoinBank.Services._BlockChain
 
                 var srcEid = MapNetworkToEid(sourceNetwork);
 
-                var returnOptions = BuildLzOptions();
+                var returnOptions = BuildLzOptions(false);
 
                 var result = await function.CallAsync<BigInteger>(
                     srcEid,
@@ -563,13 +564,23 @@ namespace CoinBank.Services._BlockChain
             }
         }
 
-        private byte[] BuildLzOptions()
+        private byte[] BuildLzOptions(bool isSendOption = true)
         {
-            //var hex = "0x00030100110100000000000000000000000000030d40";
-            var hex = "0x000301001101000000000000000000000000000249f0";
+            if(isSendOption)
+            {
+                var hex = "0x000301001101000000000000000000000000000dbba0";
 
-            return Nethereum.Hex.HexConvertors.Extensions.HexByteConvertorExtensions
-                .HexToByteArray(hex);
+                return Nethereum.Hex.HexConvertors.Extensions.HexByteConvertorExtensions
+                    .HexToByteArray(hex);
+            }
+            else // return option
+            {
+                var hex = "0x00030100110100000000000000000000000000030d40";
+
+                return Nethereum.Hex.HexConvertors.Extensions.HexByteConvertorExtensions
+                    .HexToByteArray(hex);
+            }
+           
         }
        
         public async Task<BigInteger> GetLiquidityBalanceAsync(string tokenName, string network)
