@@ -9,6 +9,7 @@ using CoinBank.Services._PreSale;
 using CoinBank.Services._PreSale.DTOs.Storages;
 using CoinBank.Services._PreSaleOrder.DTOs.Results;
 using CoinBank.Services._PreSaleOrder.DTOs.Updates;
+using CoinBank.Services._Price;
 using CoinBank.Services._Transaction._Hub;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.CodeAnalysis;
@@ -32,6 +33,7 @@ namespace CoinBank.Services._PreSaleOrder
         BlockChainSettings _blockChainSettings,
         ILogger<PreSaleOrderService> _logger,
         PreSaleStorage _preSaleStorage,
+        PriceService _priceService, 
         IHubContext<WalletNotifyHub> _hubContext,
         IBlockChainService _blockChainService) : IPreSaleOrderService, IScopedDependency
     {
@@ -64,9 +66,14 @@ namespace CoinBank.Services._PreSaleOrder
 
             var tokenData = ValidateToken(presale.Symbol);
 
+            var rzusdPrice = await _priceService.GetOneTokenPriceForInternalUsageAsync("RZUSD");
+
+
             var receivingTokenAmount = update.TokenAmount;
             var receivingTokenAmountInWei = _blockChainService.ConvertToWei(update.TokenAmount, tokenData.PriceDecimalPlaces);
-            var paymetTokenAmount = receivingTokenAmount * presale.Price;
+            var paymetTokenAmountInUSDT = receivingTokenAmount * presale.Price;
+            var paymetTokenAmount = paymetTokenAmountInUSDT / rzusdPrice; 
+
             var paymetTokenAmountInWei = _blockChainService.ConvertToWei(paymetTokenAmount);
 
             var newOrder = new PreSaleOrder
