@@ -43,15 +43,15 @@ builder.Services.AddSignalR().AddJsonProtocol(options =>
        .Add(new JsonStringEnumConverter());
 });
 
-builder.WebHost.UseSentry(o =>
-{
-    o.Dsn = "https://30c849fb66da66c45623128c8bc84f76@o4510492345368576.ingest.de.sentry.io/4511528763326544";
-    o.TracesSampleRate = 1.0;
-    o.AttachStacktrace = true;
-    o.SendDefaultPii = true;
-    o.Debug = true;
-    o.IncludeActivityData = true;
-});
+//builder.WebHost.UseSentry(o =>
+//{
+//    o.Dsn = "https://30c849fb66da66c45623128c8bc84f76@o4510492345368576.ingest.de.sentry.io/4511528763326544";
+//    o.TracesSampleRate = 1.0;
+//    o.AttachStacktrace = true;
+//    o.SendDefaultPii = true;
+//    o.Debug = true;
+//    o.IncludeActivityData = true;
+//});
 
 
 var app = builder.Build();

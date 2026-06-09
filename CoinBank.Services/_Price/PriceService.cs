@@ -4,9 +4,6 @@ using CoinBank.Services._Price.DTOs.Settings;
 using CoinBank.Services._Price.DTOs.Storages;
 using Microsoft.CodeAnalysis;
 using Microsoft.Extensions.Logging;
-using Nethereum.Contracts.QueryHandlers.MultiCall;
-using Nethereum.Contracts.Standards.ERC20.TokenList;
-using System.Collections.Concurrent;
 using System.Text.Json;
 using Utilities.Exceptions.Common;
 using static Utilities.Constants.RegisterMode;
@@ -17,6 +14,7 @@ namespace CoinBank.Services._Price
        AvailableTokensSettings _availableTokenDatas,
        ILogger<PriceService> _logger,
        PriceSetting _priceSetting,
+       CoinHistoryStorage _coinHistoryStorage,
        PriceStorage _priceStorage) : IPriceService, IScopedDependency
     {
         private static readonly HttpClient _httpClient = new HttpClient();
@@ -233,7 +231,7 @@ namespace CoinBank.Services._Price
         #endregion
 
 
-        #region CoinMarketCap
+        #region CoinMarketCap Price
         public async Task<List<PriceResult>> FetchTokensPriceFromCoinMarketCapAsync(List<string> symbols)
         {
             if (symbols == null || !symbols.Any())
@@ -482,7 +480,198 @@ namespace CoinBank.Services._Price
 
         #endregion
 
+        #region CoinMarketCap Historical
 
+        public async Task SyncCoinHistoryTokenFromCoinMarketCapAsync()
+        {
+            var token = _availableTokenDatas.FirstOrDefault(q => q.Name == "COINBANK");
+            if (token == null) return;
+
+            await GetCoinHistoryAsync(token.Name, token.CMCID);
+        }
+
+        private async Task<CoinHistoryData> GetCoinHistoryAsync(string coinName, long coinId)
+        {
+           
+            var end = DateTime.UtcNow;
+            var start = end.AddDays(-365);
+
+            var jsonString = await GetOhlcvHistoricalAsync(coinId, start, end);
+
+            if (string.IsNullOrEmpty(jsonString))
+            {
+                _logger.LogWarning("No OHLCV data returned for coinId: {CoinId}", coinId);
+
+                return new CoinHistoryData
+                {
+                    Daily = new(),
+                    Weekly = new(),
+                    Annually = new()
+                };
+            }
+
+            using var doc = JsonDocument.Parse(jsonString);
+
+            if (!doc.RootElement.TryGetProperty("data", out var data) ||
+                !data.TryGetProperty("quotes", out var quotes))
+            {
+                return new CoinHistoryData();
+            }
+
+            var parsed = Parse(quotes);
+
+            var result = new CoinHistoryData
+            {
+                Daily = BuildDaily(parsed),
+                Weekly = BuildWeekly(parsed),
+                Annually = BuildMonthly(parsed)
+            };
+
+            _coinHistoryStorage[coinName] = result;
+
+            return result;
+        }
+
+        private async Task<string?> GetOhlcvHistoricalAsync(long coinId, DateTime start, DateTime end)
+        {
+            string url =
+                $"https://pro-api.coinmarketcap.com/v2/cryptocurrency/ohlcv/historical" +
+                $"?id={coinId}&time_start={start:yyyy-MM-dd}&time_end={end:yyyy-MM-dd}";
+
+            try
+            {
+                var request = new HttpRequestMessage(HttpMethod.Get, url);
+                request.Headers.Add("X-CMC_PRO_API_KEY", _priceSetting.CMCApiKey);
+
+                var response = await _httpClient.SendAsync(request);
+                response.EnsureSuccessStatusCode();
+
+                return await response.Content.ReadAsStringAsync();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex,
+                    "Error fetching OHLCV historical data from CoinMarketCap for coinId: {CoinId}",
+                    coinId);
+
+                return null;
+            }
+        }
+
+        private List<CoinCandle> BuildDaily(List<CoinCandle> data)
+        {
+            return data
+                .OrderBy(x => x.Time)
+                .TakeLast(30)
+                .ToList();
+        }
+
+        private List<CoinCandle> BuildWeekly(List<CoinCandle> data)
+        {
+            return data
+                .OrderBy(x => x.Time)
+                .GroupBy(x => GetWeekStart(x.Time))
+                .Select(g => new CoinCandle
+                {
+                    Time = g.Key,
+                    Open = g.First().Open,
+                    Close = g.Last().Close,
+                    High = g.Max(x => x.High),
+                    Low = g.Min(x => x.Low),
+                    Volume = g.Sum(x => x.Volume)
+                })
+                .ToList();
+        }
+
+        private List<CoinCandle> BuildMonthly(List<CoinCandle> data)
+        {
+            var grouped = data
+                .OrderBy(x => x.Time)
+                .GroupBy(x => new { x.Time.Year, x.Time.Month })
+                .ToDictionary(
+                    g => new DateTime(g.Key.Year, g.Key.Month, 1),
+                    g => new CoinCandle
+                    {
+                        Time = new DateTime(g.Key.Year, g.Key.Month, 1),
+                        Open = g.First().Open,
+                        Close = g.Last().Close,
+                        High = g.Max(x => x.High),
+                        Low = g.Min(x => x.Low),
+                        Volume = g.Sum(x => x.Volume)
+                    });
+
+            var result = new List<CoinCandle>();
+
+            for (int i = 11; i >= 0; i--)
+            {
+                var date = new DateTime(DateTime.UtcNow.AddMonths(-i).Year,
+                                         DateTime.UtcNow.AddMonths(-i).Month,
+                                         1);
+
+                if (grouped.TryGetValue(date, out var candle))
+                    result.Add(candle);
+                else
+                    result.Add(new CoinCandle
+                    {
+                        Time = date,
+                        Open = 0,
+                        Close = 0,
+                        High = 0,
+                        Low = 0,
+                        Volume = 0
+                    });
+            }
+
+            return result;
+        }
+
+        //private List<CoinCandle> BuildMonthly(List<CoinCandle> data)
+        //{
+        //    return data
+        //        .OrderBy(x => x.Time)
+        //        .GroupBy(x => new { x.Time.Year, x.Time.Month })
+        //        .Select(g => new CoinCandle
+        //        {
+        //            Time = new DateTime(g.Key.Year, g.Key.Month, 1),
+        //            Open = g.First().Open,
+        //            Close = g.Last().Close,
+        //            High = g.Max(x => x.High),
+        //            Low = g.Min(x => x.Low),
+        //            Volume = g.Sum(x => x.Volume)
+        //        })
+        //        .ToList();
+        //}
+
+        private DateTime GetWeekStart(DateTime date)
+        {
+            var diff = (7 + (date.DayOfWeek - DayOfWeek.Monday)) % 7;
+            return date.Date.AddDays(-diff);
+        }
+
+        private List<CoinCandle> Parse(JsonElement quotes)
+        {
+            var list = new List<CoinCandle>();
+
+            foreach (var item in quotes.EnumerateArray())
+            {
+                var time = item.GetProperty("time_close").GetDateTime();
+                var quote = item.GetProperty("quote").GetProperty("USD");
+
+                list.Add(new CoinCandle
+                {
+                    Time = time,
+                    Open = quote.GetProperty("open").GetDecimal(),
+                    Close = quote.GetProperty("close").GetDecimal(),
+                    High = quote.GetProperty("high").GetDecimal(),
+                    Low = quote.GetProperty("low").GetDecimal(),
+                    Volume = quote.GetProperty("volume").GetDecimal()
+                });
+            }
+
+            return list;
+        }
+
+        #endregion
 
         public async Task<EffectivePriceResult> CalculateEffectivePriceAsync(string tokenName, decimal assetQuantity, decimal USDTAmount)
         {
