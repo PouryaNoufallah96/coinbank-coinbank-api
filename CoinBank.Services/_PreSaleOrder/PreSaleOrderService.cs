@@ -33,7 +33,7 @@ namespace CoinBank.Services._PreSaleOrder
         BlockChainSettings _blockChainSettings,
         ILogger<PreSaleOrderService> _logger,
         PreSaleStorage _preSaleStorage,
-        PriceService _priceService, 
+        IPriceService _priceService, 
         IHubContext<WalletNotifyHub> _hubContext,
         IBlockChainService _blockChainService) : IPreSaleOrderService, IScopedDependency
     {
