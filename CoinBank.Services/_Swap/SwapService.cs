@@ -430,6 +430,28 @@ namespace CoinBank.Services._Swap
             }
         }
 
+        public async Task AddRefundTransactionToSwapAsync(AddTransactionToSwapUpdate update)
+        {
+            await AddTransactionToSwapAsync(update);
+
+            var refundTxHash = await _blockChainService.ClaimTokenRefundAsync(update.SwapReference, update.Network);
+            if (refundTxHash != null)
+            {
+                var filter = Builders<Swap>.Filter.Eq(
+                    x => x.SwapReference,
+                    update.SwapReference);
+
+                var updateDef = Builders<Swap>.Update
+                    .Set(x => x.SwapRefundRegisterHash, refundTxHash)
+                    .Set(x => x.SwapRefundRegisterMoment, DateTime.UtcNow);
+
+                await _swapRepository.FindOneAndUpdateAsync(
+                    filter,
+                    updateDef);
+            }
+
+        }
+
         private async Task SyncSwapStateAsync(Swap swap)
         {
             //var swap = await _swapRepository.AsQueryable().FirstOrDefaultAsync(q => q.SwapReference == swapReference);
@@ -443,7 +465,7 @@ namespace CoinBank.Services._Swap
             if (swap.Transactions == null || !swap.Transactions.Any())
                 return;
 
-            var hasFailed = swap.Transactions.Any(t => t.Type == SwapTransactionType.Failed);
+            var hasFailed = swap.Transactions.Any(t => t.Type == SwapTransactionType.Failed || t.Type == SwapTransactionType.Refund || t.Type == SwapTransactionType.RefundClaimed);
             var hasExecute = swap.Transactions.Any(t => t.Type == SwapTransactionType.Execute);
             var hasInit = swap.Transactions.Any(t => t.Type == SwapTransactionType.Init);
 
@@ -502,6 +524,9 @@ namespace CoinBank.Services._Swap
 
                 SwapTransactionType.Failed =>
                     $"Swap failed: {swap.SourceSymbol} → {swap.DestinationSymbol}. Please try again.",
+
+                SwapTransactionType.Refund =>
+                    $"Swap refunded: {swap.SourceAmount} {swap.SourceSymbol} has been returned to your wallet.",
 
                 _ => "Swap status updated."
             };

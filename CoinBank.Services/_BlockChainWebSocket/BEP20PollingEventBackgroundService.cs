@@ -334,6 +334,12 @@ namespace CoinBank.Services._BlockChainWebSocket
                                 continue;
                             }
 
+                            var refundClaimed = log.DecodeEvent<TokenRefundClaimedEventDTO>();
+                            if (refundClaimed != null)
+                            {
+                                await HandleTokenRefundClaimed(log, refundClaimed, NetworkName);
+                                continue;
+                            }
                         }
                         catch (Exception ex)
                         {
@@ -468,7 +474,33 @@ namespace CoinBank.Services._BlockChainWebSocket
                 EventType = BlockchainEventType.SwapRefunded
             });
         }
+        private async Task HandleTokenRefundClaimed(FilterLog log, EventLog<TokenRefundClaimedEventDTO> ev, string network)
+        {
+            var swapId = ByteArray32ToHex(ev.Event.SwapId);
 
+            _logger.LogInformation(
+                "{Prefix} TokenRefundClaimed | SwapId: {SwapId} | Token: {Token} | Recipient: {Recipient} | Amount: {Amount}",
+                SwapLogPrefix,
+                swapId,
+                ev.Event.Token,
+                ev.Event.Recipient,
+                ev.Event.Amount);
+
+            await _transactionLogService.CreateSwapRefundClaimedLogAsync(
+                new SwapRefundClaimedLog
+                {
+                    Hash = log.TransactionHash,
+                    Address = log.Address,
+                    BlockNumber = log.BlockNumber.Value,
+                    SwapId = swapId,
+                    Token = ev.Event.Token,
+                    Recipient = ev.Event.Recipient,
+                    Amount = ev.Event.Amount,
+                    User = ev.Event.Recipient,
+                    Network = network,
+                    EventType = BlockchainEventType.SwapRefundClaimed
+                });
+        }
         private async Task<HexBigInteger> GetSwapLastProcessedBlock(CancellationToken cancellationToken)
         {
             try

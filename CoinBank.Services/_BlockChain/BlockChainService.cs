@@ -35,6 +35,7 @@ namespace CoinBank.Services._BlockChain
         private readonly Web3 _erc20Web3;
         private readonly Web3 _trc20Web3;
         private readonly Account _bep20Account;
+        private readonly Account _erc20Account;
         private readonly Contract _contract;
 
 
@@ -54,9 +55,13 @@ namespace CoinBank.Services._BlockChain
             //_web3 = new Web3(_settings.RpcUrl2);
 
             _bep20Account = new Account(_settings.PrivateKey, _settings.BEP20ChainId);
+            _erc20Account = new Account(_settings.PrivateKey, _settings.ERC20ChainId);
+
             _bep20Web3 = new Web3(_bep20Account, _settings.BEP20RpcUrl);
             _bep20Web3.TransactionManager.UseLegacyAsDefault = true;
-            _erc20Web3 = new Web3(_settings.ERC20RpcUrl);
+            _erc20Web3 = new Web3(_erc20Account,_settings.ERC20RpcUrl);
+            _erc20Web3.TransactionManager.UseLegacyAsDefault = true;
+
             _trc20Web3 = new Web3(_settings.TRC20RpcUrl);
 
         }
@@ -622,6 +627,55 @@ namespace CoinBank.Services._BlockChain
             }
         }
 
+
+        public async Task<string> ClaimTokenRefundAsync(string swapReference, string network)
+        {
+            try
+            {
+                var web3 = GetWeb3(network);
+                var contractAddress = GetSwapContractAddress(network);
+
+                var contract = web3.Eth.GetContract(
+                    SwapAbi,
+                    contractAddress);
+
+                var function = contract.GetFunction("claimTokenRefund");
+
+                var swapIdBytes = HexToByteArray32(swapReference);
+
+                var fromAddress = web3.TransactionManager.Account?.Address;
+
+                if (string.IsNullOrWhiteSpace(fromAddress))
+                    throw new BadRequestException(
+                        $"No account configured for network {network}.");
+
+                var txHash = await function.SendTransactionAsync(
+                    fromAddress,
+                    swapIdBytes);
+
+                _logger.LogInformation(
+                    "ClaimTokenRefund | Network: {Network} | SwapReference: {SwapReference} | TxHash: {TxHash}",
+                    network,
+                    swapReference,
+                    txHash);
+
+                return txHash;
+            }
+            catch (SmartContractRevertException revertEx)
+            {
+                _logger.LogError(
+                    revertEx,
+                    "Contract revert in ClaimTokenRefund: {Message}",
+                    revertEx.Message);
+
+                throw;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error in ClaimTokenRefundAsync");
+                throw;
+            }
+        }
         public uint MapNetworkToEid(string network)
         {
             return network?.ToUpper() switch

@@ -121,4 +121,27 @@ namespace CoinBank.Services._Transaction.DTOs.Updates
         public string User { get; set; }
     }
 
+    public class SwapRefundClaimedLog
+    {
+        public string Hash { get; set; }
+        public string Address { get; set; }
+        public BigInteger BlockNumber { get; set; }
+        public string SwapId { get; set; }
+        public string Token { get; set; }
+        public BigInteger Amount { get; set; }
+        public string User { get; set; }
+        public string Recipient { get; set; }
+        public BlockchainEventType EventType { get; set; }
+        public string Network { get; set; }
+    }
+
+    public class SwapRefundClaimedLogData
+    {
+        public string SwapId { get; set; }
+        public string Token { get; set; }
+        public string Amount { get; set; }
+        public string User { get; set; }
+        public string Recipient { get; set; }
+    }
+
 }

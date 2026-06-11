@@ -86,4 +86,20 @@ namespace CoinBank.Services._BlockChainWebSocket.DTOs
         public string User { get; set; }
     }
 
+    [Event("TokenRefundClaimed")]
+    public class TokenRefundClaimedEventDTO : IEventDTO
+    {
+        [Parameter("bytes32", "swapId", 1, true)]
+        public byte[] SwapId { get; set; }
+
+        [Parameter("address", "token", 2, true)]
+        public string Token { get; set; }
+
+        [Parameter("address", "recipient", 3, true)]
+        public string Recipient { get; set; }
+
+        [Parameter("uint256", "amount", 4, false)]
+        public BigInteger Amount { get; set; }
+    }
+
 }

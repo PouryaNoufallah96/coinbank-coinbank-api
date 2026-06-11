@@ -31,6 +31,9 @@ namespace CoinBank.Domain.Collections
         public string RegisterHash { get; set; }
         public DateTime? RegisterMoment { get; set; } = null;
 
+        public string SwapRefundRegisterHash { get; set; } = null;
+        public DateTime? SwapRefundRegisterMoment { get; set; } = null;
+
         public SwapState State { get; set; } = SwapState.NotRegistered;
         public List<SwapTransaction> Transactions { get; set; } = [];
     }
@@ -48,6 +51,6 @@ namespace CoinBank.Domain.Collections
         public SwapTransactionType Type { get; set; }
     }
 
-    public enum SwapTransactionType { Init, Execute ,Failed}
+    public enum SwapTransactionType { Init, Execute ,Failed, Refund , RefundClaimed }
 
 }

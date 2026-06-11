@@ -43,6 +43,7 @@ namespace CoinBank.Domain.Collections
         TransactionConfirmed, 
         TransactionFailed,
         BlockMined,
-        NetworkStatus
+        NetworkStatus,
+        SwapRefundClaimed
     }
 }

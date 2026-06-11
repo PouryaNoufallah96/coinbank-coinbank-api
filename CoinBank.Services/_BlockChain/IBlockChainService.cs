@@ -16,6 +16,7 @@ namespace CoinBank.Services._BlockChain
         Task<(decimal Fee, string token)> SwapGetEstimatedFeeAsync(GetSwapEstimatedFeeUpdate update);
         Task<BigInteger> SwapGetOutputAmountAsync(SwapGetOutputAmount update);
         Task<BigInteger> GetLiquidityBalanceAsync(string tokenName, string network);
+        Task<string> ClaimTokenRefundAsync(string swapReference, string network);
         uint MapNetworkToEid(string network);
         Task<BigInteger> EstimateReturnFeeAsync(string sourceNetwork, string destinationNetwork);
 

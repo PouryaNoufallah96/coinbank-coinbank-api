@@ -11,6 +11,8 @@ namespace CoinBank.Services._Swap
         Task RemoveNotRegisteredSwapsAsync();
 
         Task AddTransactionToSwapAsync(AddTransactionToSwapUpdate update);
+        Task AddRefundTransactionToSwapAsync(AddTransactionToSwapUpdate update);
+        //Task AddRefundDataToSwapAsync(string swapReference);
 
         Task InitializeSwapStorageAsync();
         Task UpdateSingleTokenInStorageAsync(string tokenAddress, string network);

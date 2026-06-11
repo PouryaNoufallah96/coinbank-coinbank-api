@@ -18,6 +18,7 @@ namespace CoinBank.Services._Transaction
         Task CreateSwapFailedLogAsync(SwapFailedLog input);
         Task CreateSwapCompletedLogAsync(SwapCompletedLog input);
         Task CreateSwapRefundedLogAsync(SwapRefundedLog input);
+        Task CreateSwapRefundClaimedLogAsync(SwapRefundClaimedLog input);
         Task<BigInteger> GetSwapLastCheckedBlockNumberAsync(string network);
 
 

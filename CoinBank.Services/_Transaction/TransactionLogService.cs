@@ -405,10 +405,73 @@ namespace CoinBank.Services._Transaction
                 };
 
                 await _transactionLogRepository.InsertOneAsync(newLog);
+
+                await _swapService.AddTransactionToSwapAsync(new _Swap.DTOs.Updates.AddTransactionToSwapUpdate
+                {
+                    SwapReference = input.SwapId,
+                    Amount = input.Amount,
+                    Hash = input.Hash,
+                    Network = input.Network,
+                    TokenAddress = input.Token,
+                    Type = SwapTransactionType.Refund
+                });
+
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error while creating SwapRefunded transaction log.");
+            }
+        }
+
+
+        public async Task CreateSwapRefundClaimedLogAsync(SwapRefundClaimedLog input)
+        {
+            try
+            {
+                var existsLog = await _transactionLogRepository.AsQueryable()
+                    .Where(q =>
+                        q.Hash.ToLower() == input.Hash.ToLower() &&
+                        q.Reference.ToLower() == input.SwapId.ToLower() &&
+                        q.EventType == BlockchainEventType.SwapRefundClaimed)
+                    .FirstOrDefaultAsync();
+
+                if (existsLog != null)
+                {
+                    _logger.LogWarning(
+                        "Duplicate SwapRefundClaimed log detected for SwapId {SwapId}. Skipping insertion. Hash: {Hash}",
+                        input.SwapId, input.Hash);
+                    return;
+                }
+
+                var newLog = new TransactionLog
+                {
+                    Hash = input.Hash,
+                    Wallet = input.User,
+                    BlockNumber = (decimal)input.BlockNumber,
+                    EventType = BlockchainEventType.SwapRefundClaimed,
+                    Status = TransactionStatus.Confirmed,
+                    Network = input.Network,
+                    Reference = input.SwapId,
+                    TokenAddress = input.Token,
+                    Data = SerializeData(input)
+                };
+
+                await _transactionLogRepository.InsertOneAsync(newLog);
+
+                await _swapService.AddTransactionToSwapAsync(new _Swap.DTOs.Updates.AddTransactionToSwapUpdate
+                {
+                    SwapReference = input.SwapId,
+                    Amount = input.Amount,
+                    Hash = input.Hash,
+                    Network = input.Network,
+                    TokenAddress = input.Token,
+                    Type = SwapTransactionType.RefundClaimed
+                });
+            }
+            
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error while creating SwapRefundClaimed transaction log.");
             }
         }
 
@@ -433,6 +496,7 @@ namespace CoinBank.Services._Transaction
             return new BigInteger(lastBlock.BlockNumber);
         }
 
+       
         #endregion
 
 
@@ -713,6 +777,15 @@ namespace CoinBank.Services._Transaction
                     Token = x.Token,
                     Amount = x.Amount.ToString(),
                     User = x.User
+                },
+
+                SwapRefundClaimedLog x => new SwapRefundClaimedLogData
+                {
+                    SwapId = x.SwapId,
+                    Token = x.Token,
+                    Amount = x.Amount.ToString(),
+                    User = x.User,
+                    Recipient = x.Recipient
                 },
                 DepositCreatedLog x => new DepositCreatedData
                 {

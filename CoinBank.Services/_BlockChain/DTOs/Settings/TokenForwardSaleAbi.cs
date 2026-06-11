@@ -394,392 +394,465 @@
     ";
 
         public const string SwapAbi = @"[
-    {
-        ""type"": ""function"",
-        ""name"": ""estimateFee"",
-        ""inputs"": [
-            {
-                ""name"": ""params"",
-                ""type"": ""tuple"",
-                ""internalType"": ""struct SwapTypes.SwapParams"",
-                ""components"": [
-                    {
-                        ""name"": ""swapId"",
-                        ""type"": ""bytes32"",
-                        ""internalType"": ""bytes32""
-                    },
-                    {
-                        ""name"": ""dstEid"",
-                        ""type"": ""uint32"",
-                        ""internalType"": ""uint32""
-                    },
-                    {
-                        ""name"": ""tokenIn"",
-                        ""type"": ""address"",
-                        ""internalType"": ""address""
-                    },
-                    {
-                        ""name"": ""tokenOut"",
-                        ""type"": ""address"",
-                        ""internalType"": ""address""
-                    },
-                    {
-                        ""name"": ""amountIn"",
-                        ""type"": ""uint256"",
-                        ""internalType"": ""uint256""
-                    },
-                    {
-                        ""name"": ""minAmountOut"",
-                        ""type"": ""uint256"",
-                        ""internalType"": ""uint256""
-                    },
-                    {
-                        ""name"": ""receiver"",
-                        ""type"": ""address"",
-                        ""internalType"": ""address""
-                    },
-                    {
-                        ""name"": ""path"",
-                        ""type"": ""address[]"",
-                        ""internalType"": ""address[]""
-                    }
-                ]
-            },
-            {
-                ""name"": ""sendOptions"",
-                ""type"": ""bytes"",
-                ""internalType"": ""bytes""
-            },
-            {
-                ""name"": ""returnOptions"",
-                ""type"": ""bytes"",
-                ""internalType"": ""bytes""
-            },
-            {
-                ""name"": ""returnNativeDrop"",
-                ""type"": ""uint128"",
-                ""internalType"": ""uint128""
-            }
-        ],
-        ""outputs"": [
-            {
-                ""name"": """",
-                ""type"": ""uint256"",
-                ""internalType"": ""uint256""
-            }
-        ],
-        ""stateMutability"": ""view""
-    },
-    {
-        ""type"": ""function"",
-        ""name"": ""estimateReturnFee"",
-        ""inputs"": [
-            {
-                ""name"": ""srcEid"",
-                ""type"": ""uint32"",
-                ""internalType"": ""uint32""
-            },
-            {
-                ""name"": ""returnOptions"",
-                ""type"": ""bytes"",
-                ""internalType"": ""bytes""
-            }
-        ],
-        ""outputs"": [
-            {
-                ""name"": """",
-                ""type"": ""uint256"",
-                ""internalType"": ""uint256""
-            }
-        ],
-        ""stateMutability"": ""view""
-    },
-    {
-        ""type"": ""function"",
-        ""name"": ""getLiquidityBalance"",
-        ""inputs"": [
-            {
-                ""name"": ""token"",
-                ""type"": ""address"",
-                ""internalType"": ""address""
-            }
-        ],
-        ""outputs"": [
-            {
-                ""name"": """",
-                ""type"": ""uint256"",
-                ""internalType"": ""uint256""
-            }
-        ],
-        ""stateMutability"": ""view""
-    },
-    {
-        ""type"": ""function"",
-        ""name"": ""getOutputAmount"",
-        ""inputs"": [
-            {
-                ""name"": ""srcEid"",
-                ""type"": ""uint32"",
-                ""internalType"": ""uint32""
-            },
-            {
-                ""name"": ""dstEid"",
-                ""type"": ""uint32"",
-                ""internalType"": ""uint32""
-            },
-            {
-                ""name"": ""amountIn"",
-                ""type"": ""uint256"",
-                ""internalType"": ""uint256""
-            },
-            {
-                ""name"": ""path"",
-                ""type"": ""address[]"",
-                ""internalType"": ""address[]""
-            }
-        ],
-        ""outputs"": [
-            {
-                ""name"": """",
-                ""type"": ""uint256"",
-                ""internalType"": ""uint256""
-            }
-        ],
-        ""stateMutability"": ""view""
-    },
-    {
-        ""type"": ""function"",
-        ""name"": ""swap"",
-        ""inputs"": [
-            {
-                ""name"": ""params"",
-                ""type"": ""tuple"",
-                ""internalType"": ""struct SwapTypes.SwapParams"",
-                ""components"": [
-                    {
-                        ""name"": ""swapId"",
-                        ""type"": ""bytes32"",
-                        ""internalType"": ""bytes32""
-                    },
-                    {
-                        ""name"": ""dstEid"",
-                        ""type"": ""uint32"",
-                        ""internalType"": ""uint32""
-                    },
-                    {
-                        ""name"": ""tokenIn"",
-                        ""type"": ""address"",
-                        ""internalType"": ""address""
-                    },
-                    {
-                        ""name"": ""tokenOut"",
-                        ""type"": ""address"",
-                        ""internalType"": ""address""
-                    },
-                    {
-                        ""name"": ""amountIn"",
-                        ""type"": ""uint256"",
-                        ""internalType"": ""uint256""
-                    },
-                    {
-                        ""name"": ""minAmountOut"",
-                        ""type"": ""uint256"",
-                        ""internalType"": ""uint256""
-                    },
-                    {
-                        ""name"": ""receiver"",
-                        ""type"": ""address"",
-                        ""internalType"": ""address""
-                    },
-                    {
-                        ""name"": ""path"",
-                        ""type"": ""address[]"",
-                        ""internalType"": ""address[]""
-                    }
-                ]
-            },
-            {
-                ""name"": ""sendOptions"",
-                ""type"": ""bytes"",
-                ""internalType"": ""bytes""
-            },
-            {
-                ""name"": ""returnOptions"",
-                ""type"": ""bytes"",
-                ""internalType"": ""bytes""
-            },
-            {
-                ""name"": ""returnNativeDrop"",
-                ""type"": ""uint128"",
-                ""internalType"": ""uint128""
-            }
-        ],
-        ""outputs"": [],
-        ""stateMutability"": ""payable""
-    },
-    {
-        ""type"": ""event"",
-        ""name"": ""SwapCompleted"",
-        ""inputs"": [
-            {
-                ""name"": ""swapId"",
-                ""type"": ""bytes32"",
-                ""indexed"": false,
-                ""internalType"": ""bytes32""
-            }
-        ],
-        ""anonymous"": false
-    },
-    {
-        ""type"": ""event"",
-        ""name"": ""SwapExecuted"",
-        ""inputs"": [
-            {
-                ""name"": ""swapId"",
-                ""type"": ""bytes32"",
-                ""indexed"": false,
-                ""internalType"": ""bytes32""
-            },
-            {
-                ""name"": ""tokenOut"",
-                ""type"": ""address"",
-                ""indexed"": false,
-                ""internalType"": ""address""
-            },
-            {
-                ""name"": ""amountOut"",
-                ""type"": ""uint256"",
-                ""indexed"": false,
-                ""internalType"": ""uint256""
-            },
-            {
-                ""name"": ""receiver"",
-                ""type"": ""address"",
-                ""indexed"": false,
-                ""internalType"": ""address""
-            }
-        ],
-        ""anonymous"": false
-    },
-    {
-        ""type"": ""event"",
-        ""name"": ""SwapFailed"",
-        ""inputs"": [
-            {
-                ""name"": ""swapId"",
-                ""type"": ""bytes32"",
-                ""indexed"": false,
-                ""internalType"": ""bytes32""
-            },
-            {
-                ""name"": ""tokenOut"",
-                ""type"": ""address"",
-                ""indexed"": false,
-                ""internalType"": ""address""
-            },
-            {
-                ""name"": ""amountOut"",
-                ""type"": ""uint256"",
-                ""indexed"": false,
-                ""internalType"": ""uint256""
-            },
-            {
-                ""name"": ""receiver"",
-                ""type"": ""address"",
-                ""indexed"": false,
-                ""internalType"": ""address""
-            }
-        ],
-        ""anonymous"": false
-    },
-    {
-        ""type"": ""event"",
-        ""name"": ""SwapInitiated"",
-        ""inputs"": [
-            {
-                ""name"": ""swapId"",
-                ""type"": ""bytes32"",
-                ""indexed"": false,
-                ""internalType"": ""bytes32""
-            },
-            {
-                ""name"": ""dstEid"",
-                ""type"": ""uint32"",
-                ""indexed"": false,
-                ""internalType"": ""uint32""
-            },
-            {
-                ""name"": ""tokenIn"",
-                ""type"": ""address"",
-                ""indexed"": false,
-                ""internalType"": ""address""
-            },
-            {
-                ""name"": ""tokenOut"",
-                ""type"": ""address"",
-                ""indexed"": false,
-                ""internalType"": ""address""
-            },
-            {
-                ""name"": ""amountIn"",
-                ""type"": ""uint256"",
-                ""indexed"": false,
-                ""internalType"": ""uint256""
-            },
-            {
-                ""name"": ""amountOut"",
-                ""type"": ""uint256"",
-                ""indexed"": false,
-                ""internalType"": ""uint256""
-            },
-            {
-                ""name"": ""receiver"",
-                ""type"": ""address"",
-                ""indexed"": false,
-                ""internalType"": ""address""
-            },
-            {
-                ""name"": ""fee"",
-                ""type"": ""uint256"",
-                ""indexed"": false,
-                ""internalType"": ""uint256""
-            }
-        ],
-        ""anonymous"": false
-    },
-    {
-        ""type"": ""event"",
-        ""name"": ""SwapRefunded"",
-        ""inputs"": [
-            {
-                ""name"": ""swapId"",
-                ""type"": ""bytes32"",
-                ""indexed"": false,
-                ""internalType"": ""bytes32""
-            },
-            {
-                ""name"": ""token"",
-                ""type"": ""address"",
-                ""indexed"": false,
-                ""internalType"": ""address""
-            },
-            {
-                ""name"": ""amount"",
-                ""type"": ""uint256"",
-                ""indexed"": false,
-                ""internalType"": ""uint256""
-            },
-            {
-                ""name"": ""user"",
-                ""type"": ""address"",
-                ""indexed"": false,
-                ""internalType"": ""address""
-            }
-        ],
-        ""anonymous"": false
-    }
-    
-]";
+  {
+    ""type"": ""function"",
+    ""name"": ""estimateFee"",
+    ""inputs"": [
+      {
+        ""name"": ""params"",
+        ""type"": ""tuple"",
+        ""internalType"": ""struct SwapTypes.SwapParams"",
+        ""components"": [
+          {
+            ""name"": ""swapId"",
+            ""type"": ""bytes32"",
+            ""internalType"": ""bytes32""
+          },
+          {
+            ""name"": ""dstEid"",
+            ""type"": ""uint32"",
+            ""internalType"": ""uint32""
+          },
+          {
+            ""name"": ""tokenIn"",
+            ""type"": ""address"",
+            ""internalType"": ""address""
+          },
+          {
+            ""name"": ""tokenOut"",
+            ""type"": ""address"",
+            ""internalType"": ""address""
+          },
+          {
+            ""name"": ""amountIn"",
+            ""type"": ""uint256"",
+            ""internalType"": ""uint256""
+          },
+          {
+            ""name"": ""minAmountOut"",
+            ""type"": ""uint256"",
+            ""internalType"": ""uint256""
+          },
+          {
+            ""name"": ""receiver"",
+            ""type"": ""address"",
+            ""internalType"": ""address""
+          },
+          {
+            ""name"": ""path"",
+            ""type"": ""address[]"",
+            ""internalType"": ""address[]""
+          }
+        ]
+      },
+      {
+        ""name"": ""sendOptions"",
+        ""type"": ""bytes"",
+        ""internalType"": ""bytes""
+      },
+      {
+        ""name"": ""returnOptions"",
+        ""type"": ""bytes"",
+        ""internalType"": ""bytes""
+      },
+      {
+        ""name"": ""returnNativeDrop"",
+        ""type"": ""uint128"",
+        ""internalType"": ""uint128""
+      }
+    ],
+    ""outputs"": [
+      {
+        ""name"": """",
+        ""type"": ""uint256"",
+        ""internalType"": ""uint256""
+      }
+    ],
+    ""stateMutability"": ""view""
+  },
+  {
+    ""type"": ""function"",
+    ""name"": ""estimateReturnFee"",
+    ""inputs"": [
+      {
+        ""name"": ""srcEid"",
+        ""type"": ""uint32"",
+        ""internalType"": ""uint32""
+      },
+      {
+        ""name"": ""returnOptions"",
+        ""type"": ""bytes"",
+        ""internalType"": ""bytes""
+      }
+    ],
+    ""outputs"": [
+      {
+        ""name"": """",
+        ""type"": ""uint256"",
+        ""internalType"": ""uint256""
+      }
+    ],
+    ""stateMutability"": ""view""
+  },
+  {
+    ""type"": ""function"",
+    ""name"": ""getOutputAmount"",
+    ""inputs"": [
+      {
+        ""name"": ""srcEid"",
+        ""type"": ""uint32"",
+        ""internalType"": ""uint32""
+      },
+      {
+        ""name"": ""dstEid"",
+        ""type"": ""uint32"",
+        ""internalType"": ""uint32""
+      },
+      {
+        ""name"": ""amountIn"",
+        ""type"": ""uint256"",
+        ""internalType"": ""uint256""
+      },
+      {
+        ""name"": ""path"",
+        ""type"": ""address[]"",
+        ""internalType"": ""address[]""
+      }
+    ],
+    ""outputs"": [
+      {
+        ""name"": """",
+        ""type"": ""uint256"",
+        ""internalType"": ""uint256""
+      }
+    ],
+    ""stateMutability"": ""view""
+  },
+  {
+    ""type"": ""function"",
+    ""name"": ""getLiquidityBalance"",
+    ""inputs"": [
+      {
+        ""name"": ""token"",
+        ""type"": ""address"",
+        ""internalType"": ""address""
+      }
+    ],
+    ""outputs"": [
+      {
+        ""name"": """",
+        ""type"": ""uint256"",
+        ""internalType"": ""uint256""
+      }
+    ],
+    ""stateMutability"": ""view""
+  },
+  {
+    ""type"": ""function"",
+    ""name"": ""swap"",
+    ""inputs"": [
+      {
+        ""name"": ""params"",
+        ""type"": ""tuple"",
+        ""internalType"": ""struct SwapTypes.SwapParams"",
+        ""components"": [
+          {
+            ""name"": ""swapId"",
+            ""type"": ""bytes32"",
+            ""internalType"": ""bytes32""
+          },
+          {
+            ""name"": ""dstEid"",
+            ""type"": ""uint32"",
+            ""internalType"": ""uint32""
+          },
+          {
+            ""name"": ""tokenIn"",
+            ""type"": ""address"",
+            ""internalType"": ""address""
+          },
+          {
+            ""name"": ""tokenOut"",
+            ""type"": ""address"",
+            ""internalType"": ""address""
+          },
+          {
+            ""name"": ""amountIn"",
+            ""type"": ""uint256"",
+            ""internalType"": ""uint256""
+          },
+          {
+            ""name"": ""minAmountOut"",
+            ""type"": ""uint256"",
+            ""internalType"": ""uint256""
+          },
+          {
+            ""name"": ""receiver"",
+            ""type"": ""address"",
+            ""internalType"": ""address""
+          },
+          {
+            ""name"": ""path"",
+            ""type"": ""address[]"",
+            ""internalType"": ""address[]""
+          }
+        ]
+      },
+      {
+        ""name"": ""sendOptions"",
+        ""type"": ""bytes"",
+        ""internalType"": ""bytes""
+      },
+      {
+        ""name"": ""returnOptions"",
+        ""type"": ""bytes"",
+        ""internalType"": ""bytes""
+      },
+      {
+        ""name"": ""returnNativeDrop"",
+        ""type"": ""uint128"",
+        ""internalType"": ""uint128""
+      }
+    ],
+    ""outputs"": [],
+    ""stateMutability"": ""payable""
+  },
+  {
+    ""type"": ""function"",
+    ""name"": ""claimTokenRefund"",
+    ""inputs"": [
+      {
+        ""name"": ""swapId"",
+        ""type"": ""bytes32"",
+        ""internalType"": ""bytes32""
+      }
+    ],
+    ""outputs"": [],
+    ""stateMutability"": ""nonpayable""
+  },
+  {
+    ""type"": ""function"",
+    ""name"": ""getRefund"",
+    ""inputs"": [
+      {
+        ""name"": ""swapId"",
+        ""type"": ""bytes32"",
+        ""internalType"": ""bytes32""
+      }
+    ],
+    ""outputs"": [
+      {
+        ""name"": ""recipient"",
+        ""type"": ""address"",
+        ""internalType"": ""address""
+      },
+      {
+        ""name"": ""token"",
+        ""type"": ""address"",
+        ""internalType"": ""address""
+      },
+      {
+        ""name"": ""amount"",
+        ""type"": ""uint256"",
+        ""internalType"": ""uint256""
+      }
+    ],
+    ""stateMutability"": ""view""
+  },
+  {
+    ""type"": ""event"",
+    ""name"": ""SwapInitiated"",
+    ""inputs"": [
+      {
+        ""name"": ""swapId"",
+        ""type"": ""bytes32"",
+        ""indexed"": false,
+        ""internalType"": ""bytes32""
+      },
+      {
+        ""name"": ""dstEid"",
+        ""type"": ""uint32"",
+        ""indexed"": false,
+        ""internalType"": ""uint32""
+      },
+      {
+        ""name"": ""tokenIn"",
+        ""type"": ""address"",
+        ""indexed"": false,
+        ""internalType"": ""address""
+      },
+      {
+        ""name"": ""tokenOut"",
+        ""type"": ""address"",
+        ""indexed"": false,
+        ""internalType"": ""address""
+      },
+      {
+        ""name"": ""amountIn"",
+        ""type"": ""uint256"",
+        ""indexed"": false,
+        ""internalType"": ""uint256""
+      },
+      {
+        ""name"": ""amountOut"",
+        ""type"": ""uint256"",
+        ""indexed"": false,
+        ""internalType"": ""uint256""
+      },
+      {
+        ""name"": ""receiver"",
+        ""type"": ""address"",
+        ""indexed"": false,
+        ""internalType"": ""address""
+      },
+      {
+        ""name"": ""fee"",
+        ""type"": ""uint256"",
+        ""indexed"": false,
+        ""internalType"": ""uint256""
+      }
+    ],
+    ""anonymous"": false
+  },
+  {
+    ""type"": ""event"",
+    ""name"": ""SwapCompleted"",
+    ""inputs"": [
+      {
+        ""name"": ""swapId"",
+        ""type"": ""bytes32"",
+        ""indexed"": false,
+        ""internalType"": ""bytes32""
+      }
+    ],
+    ""anonymous"": false
+  },
+  {
+    ""type"": ""event"",
+    ""name"": ""SwapExecuted"",
+    ""inputs"": [
+      {
+        ""name"": ""swapId"",
+        ""type"": ""bytes32"",
+        ""indexed"": false,
+        ""internalType"": ""bytes32""
+      },
+      {
+        ""name"": ""tokenOut"",
+        ""type"": ""address"",
+        ""indexed"": false,
+        ""internalType"": ""address""
+      },
+      {
+        ""name"": ""amountOut"",
+        ""type"": ""uint256"",
+        ""indexed"": false,
+        ""internalType"": ""uint256""
+      },
+      {
+        ""name"": ""receiver"",
+        ""type"": ""address"",
+        ""indexed"": false,
+        ""internalType"": ""address""
+      }
+    ],
+    ""anonymous"": false
+  },
+  {
+    ""type"": ""event"",
+    ""name"": ""SwapFailed"",
+    ""inputs"": [
+      {
+        ""name"": ""swapId"",
+        ""type"": ""bytes32"",
+        ""indexed"": false,
+        ""internalType"": ""bytes32""
+      },
+      {
+        ""name"": ""tokenOut"",
+        ""type"": ""address"",
+        ""indexed"": false,
+        ""internalType"": ""address""
+      },
+      {
+        ""name"": ""amountOut"",
+        ""type"": ""uint256"",
+        ""indexed"": false,
+        ""internalType"": ""uint256""
+      },
+      {
+        ""name"": ""receiver"",
+        ""type"": ""address"",
+        ""indexed"": false,
+        ""internalType"": ""address""
+      }
+    ],
+    ""anonymous"": false
+  },
+  {
+    ""type"": ""event"",
+    ""name"": ""SwapRefunded"",
+    ""inputs"": [
+      {
+        ""name"": ""swapId"",
+        ""type"": ""bytes32"",
+        ""indexed"": true,
+        ""internalType"": ""bytes32""
+      },
+      {
+        ""name"": ""token"",
+        ""type"": ""address"",
+        ""indexed"": true,
+        ""internalType"": ""address""
+      },
+      {
+        ""name"": ""amount"",
+        ""type"": ""uint256"",
+        ""indexed"": false,
+        ""internalType"": ""uint256""
+      },
+      {
+        ""name"": ""user"",
+        ""type"": ""address"",
+        ""indexed"": true,
+        ""internalType"": ""address""
+      }
+    ],
+    ""anonymous"": false
+  },
+  {
+    ""type"": ""event"",
+    ""name"": ""TokenRefundClaimed"",
+    ""inputs"": [
+      {
+        ""name"": ""swapId"",
+        ""type"": ""bytes32"",
+        ""indexed"": true,
+        ""internalType"": ""bytes32""
+      },
+      {
+        ""name"": ""token"",
+        ""type"": ""address"",
+        ""indexed"": true,
+        ""internalType"": ""address""
+      },
+      {
+        ""name"": ""recipient"",
+        ""type"": ""address"",
+        ""indexed"": true,
+        ""internalType"": ""address""
+      },
+      {
+        ""name"": ""amount"",
+        ""type"": ""uint256"",
+        ""indexed"": false,
+        ""internalType"": ""uint256""
+      }
+    ],
+    ""anonymous"": false
+  }
+]
+";
 
         public const string ERC20Abi = @"[
             { 'constant':true,'inputs':[{'name':'_owner','type':'address'}],'name':'balanceOf','outputs':[{'name':'balance','type':'uint256'}],'type':'function' },
