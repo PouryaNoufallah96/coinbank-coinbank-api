@@ -422,7 +422,7 @@ namespace CoinBank.Services._PreSale
             if (update.StartSellingAt >= update.EndSellingAt)
                 throw new Exception("StartSellingAt must be earlier than EndSellingAt.");
 
-            if (update.StartSellingAt <= DateTime.UtcNow.AddMinutes(-1))
+            if (update.StartSellingAt <= DateTime.UtcNow.AddDays(-1))
                 throw new Exception("StartSellingAt must be in the future.");
         }
 

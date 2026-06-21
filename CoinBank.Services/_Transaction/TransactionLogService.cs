@@ -406,7 +406,7 @@ namespace CoinBank.Services._Transaction
 
                 await _transactionLogRepository.InsertOneAsync(newLog);
 
-                await _swapService.AddTransactionToSwapAsync(new _Swap.DTOs.Updates.AddTransactionToSwapUpdate
+                await _swapService.AddRefundTransactionToSwapAsync(new _Swap.DTOs.Updates.AddTransactionToSwapUpdate
                 {
                     SwapReference = input.SwapId,
                     Amount = input.Amount,
@@ -422,7 +422,6 @@ namespace CoinBank.Services._Transaction
                 _logger.LogError(ex, "Error while creating SwapRefunded transaction log.");
             }
         }
-
 
         public async Task CreateSwapRefundClaimedLogAsync(SwapRefundClaimedLog input)
         {

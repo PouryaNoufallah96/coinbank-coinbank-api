@@ -17,7 +17,7 @@ using static Utilities.Constants.RegisterMode;
 
 namespace CoinBank.Services._BlockChainWebSocket
 {
-    public class PollingEventBackgroundService : BackgroundService, IHostedDependency
+    public class BEP20PollingEventBackgroundService : BackgroundService, IHostedDependency
     {
         private const string SwapLogPrefix = "[BEP20-POLLING-Swap]";
         private const string StakeLogPrefix = "[BEP20-STAKE-POLLING]";
@@ -27,7 +27,7 @@ namespace CoinBank.Services._BlockChainWebSocket
         private const string NetworkName = "BEP20";
 
         private readonly ITransactionLogService _transactionLogService;
-        private readonly ILogger<PollingEventBackgroundService> _logger;
+        private readonly ILogger<BEP20PollingEventBackgroundService> _logger;
         private readonly BlockChainSettings _blockChainSettings;
         private readonly object _blockLock = new();
 
@@ -48,9 +48,9 @@ namespace CoinBank.Services._BlockChainWebSocket
 
         private bool _isDisposed = false;
 
-        public PollingEventBackgroundService(
+        public BEP20PollingEventBackgroundService(
             ITransactionLogService transactionLogService,
-            ILogger<PollingEventBackgroundService> logger,
+            ILogger<BEP20PollingEventBackgroundService> logger,
             BlockChainSettings blockChainSettings)
         {
             _transactionLogService = transactionLogService;

@@ -15,24 +15,29 @@ using Nethereum.RPC.Eth.DTOs;
 using Nethereum.RPC.Reactive.Eth.Subscriptions;
 using Nethereum.Util;
 using Nethereum.Web3;
+using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Numerics;
 using System.Reactive.Linq;
+using System.Text;
+using System.Threading.Tasks;
 using static Utilities.Constants.RegisterMode;
 
 namespace CoinBank.Services._BlockChainWebSocket
 {
-    public class ERC20BlockChainEventBackgroundService : BackgroundService, IHostedDependency
+    public class TRC20BlockChainEventBackgroundService : BackgroundService, IHostedDependency
     {
-        private const string SwapLogPrefix = "[ERC20-WS-Swap]";
-        private const string TransferLogPrefix = "[ERC20-WS-Transfer]";
-        private const string CommonLogPrefix = "[ERC20-WS]";
-        private const string NetworkName = "ERC20";
+        private const string SwapLogPrefix = "[TRC20-WS-Swap]";
+        private const string TransferLogPrefix = "[TRC20-WS-Transfer]";
+        private const string CommonLogPrefix = "[TRC20-WS]";
+        private const string NetworkName = "TRC20";
 
         private readonly BlockChainSettings _blockChainSettings;
         private readonly ITransactionLogService _transactionLogService;
         private readonly ISwapService _swapService;
         private readonly AvailableTokensSettings _availableTokensSettings;
-        private readonly ILogger<ERC20BlockChainEventBackgroundService> _logger;
+        private readonly ILogger<TRC20BlockChainEventBackgroundService> _logger;
 
         private Web3 _web3;
         private StreamingWebSocketClient _webSocketClient;
@@ -60,12 +65,12 @@ namespace CoinBank.Services._BlockChainWebSocket
 
         private bool _isDisposed = false;
 
-        public ERC20BlockChainEventBackgroundService(
+        public TRC20BlockChainEventBackgroundService(
             BlockChainSettings blockChainSettings,
             ITransactionLogService transactionLogService,
             ISwapService swapService,
             AvailableTokensSettings availableTokensSettings,
-            ILogger<ERC20BlockChainEventBackgroundService> logger)
+            ILogger<TRC20BlockChainEventBackgroundService> logger)
         {
             _blockChainSettings = blockChainSettings;
             _transactionLogService = transactionLogService;
@@ -73,10 +78,10 @@ namespace CoinBank.Services._BlockChainWebSocket
             _availableTokensSettings = availableTokensSettings;
             _logger = logger;
 
-            _rpcUrls = new[] { _blockChainSettings.ERC20RpcUrl };
-            _wsUrls = new[] { _blockChainSettings.ERC20WsUrl };
+            _rpcUrls = new[] { _blockChainSettings.TRC20RpcUrl };
+            _wsUrls = new[] { _blockChainSettings.TRC20WsUrl };
 
-            _swapContractAddress = _blockChainSettings.ERC20SwapContractAddress;
+            _swapContractAddress = _blockChainSettings.TRC20SwapContractAddress;
 
             InitializeClients();
         }
@@ -214,7 +219,7 @@ namespace CoinBank.Services._BlockChainWebSocket
         {
             _web3 = new Web3(GetCurrentRpcUrl());
         }
-        
+
         private string GetCurrentRpcUrl()
         {
             return _rpcUrls[_currentRpcIndex];
@@ -537,7 +542,7 @@ namespace CoinBank.Services._BlockChainWebSocket
 
 
         #region Incoming Transfers
-     
+
         private async Task SubscribeToIncomingTransfersAsync(CancellationToken cancellationToken)
         {
             var tokens = _availableTokensSettings.Select(t => t.Address.ToLower()).ToArray();
