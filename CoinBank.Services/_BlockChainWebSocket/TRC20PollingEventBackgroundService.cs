@@ -72,7 +72,7 @@ namespace CoinBank.Services._BlockChainWebSocket
                     var safeBlock = latestBlock - 10;
                     await PollSwapMissingLogsAsync(safeBlock, stoppingToken);
 
-                    await Task.Delay(TimeSpan.FromSeconds(30), stoppingToken);
+                    await Task.Delay(TimeSpan.FromSeconds(15), stoppingToken);
                 }
                 catch (OperationCanceledException)
                 {
