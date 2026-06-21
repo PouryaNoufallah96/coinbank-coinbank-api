@@ -8,6 +8,7 @@ using CoinBank.Services._Swap._Hub;
 using CoinBank.Services._Transaction._Hub;
 using System.Text.Json.Serialization;
 using Utilities.Configuration;
+using Utilities.Exceptions.Common;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -43,15 +44,46 @@ builder.Services.AddSignalR().AddJsonProtocol(options =>
        .Add(new JsonStringEnumConverter());
 });
 
-//builder.WebHost.UseSentry(o =>
-//{
-//    o.Dsn = "https://30c849fb66da66c45623128c8bc84f76@o4510492345368576.ingest.de.sentry.io/4511528763326544";
-//    o.TracesSampleRate = 1.0;
-//    o.AttachStacktrace = true;
-//    o.SendDefaultPii = true;
-//    o.Debug = true;
-//    o.IncludeActivityData = true;
-//});
+builder.WebHost.UseSentry(o =>
+{
+    o.Dsn = "https://30c849fb66da66c45623128c8bc84f76@o4510492345368576.ingest.de.sentry.io/4511528763326544";
+    o.Environment = builder.Environment.EnvironmentName;
+    o.TracesSampleRate = 0.1;
+    o.AttachStacktrace = true;
+    o.SendDefaultPii = false;
+    o.Debug = builder.Environment.IsDevelopment();
+    o.IncludeActivityData = true;
+
+    o.SetBeforeSend((evt, _) =>
+    {
+        if (evt.Exception is BaseException be && (int)be.HttpStatusCode < 500)
+            return null;
+
+        if (IsTransientNetworkException(evt.Exception))
+            return null;
+
+        return evt;
+    });
+});
+
+static bool IsTransientNetworkException(Exception ex)
+{
+    for (var e = ex; e != null; e = e.InnerException)
+    {
+        if (e is OperationCanceledException
+              or System.Net.WebSockets.WebSocketException
+              or System.Net.Sockets.SocketException
+              or System.IO.IOException
+              or TimeoutException
+              or System.Net.Http.HttpRequestException)
+            return true;
+
+        if (e.GetType().FullName?.StartsWith("Nethereum.JsonRpc.Client.Rpc", StringComparison.Ordinal) == true)
+            return true;
+    }
+
+    return false;
+}
 
 
 var app = builder.Build();
