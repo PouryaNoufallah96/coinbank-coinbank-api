@@ -36,7 +36,9 @@ namespace CoinBank.Services._BlockChain
         private readonly Web3 _trc20Web3;
         private readonly Account _bep20Account;
         private readonly Account _erc20Account;
+        private readonly Account _trc20Account;
         private readonly Contract _contract;
+        private readonly string trc20HexAddress;
 
 
         public BlockChainService(BlockChainSettings settings,
@@ -56,14 +58,17 @@ namespace CoinBank.Services._BlockChain
 
             _bep20Account = new Account(_settings.PrivateKey, _settings.BEP20ChainId);
             _erc20Account = new Account(_settings.PrivateKey, _settings.ERC20ChainId);
+            _trc20Account = new Account(_settings.PrivateKey, 195);
 
             _bep20Web3 = new Web3(_bep20Account, _settings.BEP20RpcUrl);
             _bep20Web3.TransactionManager.UseLegacyAsDefault = true;
+
             _erc20Web3 = new Web3(_erc20Account,_settings.ERC20RpcUrl);
             _erc20Web3.TransactionManager.UseLegacyAsDefault = true;
 
-            _trc20Web3 = new Web3(_settings.TRC20RpcUrl);
-
+            _trc20Web3 = new Web3(_trc20Account,_settings.TRC20RpcUrl);
+            _trc20Web3.TransactionManager.UseLegacyAsDefault = true;
+            trc20HexAddress = "0x5242e4b89c7f2078182a69748654a8e4ab49c5d0";
         }
 
 
@@ -692,7 +697,7 @@ namespace CoinBank.Services._BlockChain
             return network?.ToUpper() switch
             {
                 "ERC20" => _settings.ERC20SwapContractAddress,
-                "TRC20" => _settings.TRC20SwapContractAddress,
+                "TRC20" => trc20HexAddress,
                 "BEP20" => _settings.BEP20SwapContractAddress,
                 _ => throw new BadRequestException($"Unsupported network: {network}")
             };
