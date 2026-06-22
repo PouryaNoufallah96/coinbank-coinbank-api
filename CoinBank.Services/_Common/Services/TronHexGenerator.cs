@@ -38,7 +38,7 @@ namespace CoinBank.Services._Common.Services
                 if (hex.Length == 40 && IsHex(hex))
                     return "0x" + hex.ToLowerInvariant();
 
-                _logger.LogWarning("{Prefix} Configured swap contract address '{Address}' is not a valid 20-byte hex address", CommonLogPrefix, address);
+                _logger.LogWarning(" Configured swap contract address '{Address}' is not a valid 20-byte hex address", address);
                 return null;
             }
 
