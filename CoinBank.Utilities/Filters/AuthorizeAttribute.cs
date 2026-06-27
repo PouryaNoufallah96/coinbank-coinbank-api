@@ -13,6 +13,7 @@ namespace Utilities.Filters
         public bool RequireActiveUser { get; set; } = false;
         public bool RequireActiveWithBEP20Wallet { get; set; } = false;
         public bool JustBSC { get; set; } = false;
+        public bool AllowAdmin { get; set; } = false;
         public AuthorizeAttribute()
         {
         }
@@ -31,6 +32,15 @@ namespace Utilities.Filters
 
             if (_claims != null && !_claims.Any(c => jwtSecurityToken.HasClaim(Claims.Permission.ToDisplay(), c)))
                 throw new AuthorizationException( "Access denied");
+
+            if (!AllowAdmin && (_claims == null || _claims.Length == 0))
+            {
+                var userTypeClaim = jwtSecurityToken.Claims
+                    .FirstOrDefault(c => c.Type == Claims.UserType.ToDisplay());
+
+                if (userTypeClaim != null && userTypeClaim.Value == UserType.Admin.ToDisplay())
+                    throw new AuthorizationException("This endpoint is not available for admin accounts");
+            }
 
             if (RequireActiveUser || RequireActiveWithBEP20Wallet)
             {
