@@ -111,7 +111,9 @@ In pipeline order, each independent:
 3. **Authorization** (`Utilities.Filters.AuthorizeAttribute`, the **custom** `[Authorize]`) — per
    action: requires a token; if permission codes are passed, requires matching `Permission`
    claim(s); optional `RequireActiveUser` / wallet-network flags. Public-API users authenticate by
-   **wallet signature** (nonce → sign → JWT).
+   **wallet signature** (nonce → sign → JWT). Admin-role tokens are rejected here — the public API
+   serves wallet customers — except on the permission-gated management endpoints (e.g.
+   `[Authorize(Permissions.PreSaleManage)]`).
 
 ## Blockchain stack
 
